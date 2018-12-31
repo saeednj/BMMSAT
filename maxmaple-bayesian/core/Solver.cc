@@ -978,7 +978,7 @@ uint64_t Solver::getSolutionCost()
     for( int i=0; i<softClauses.size(); i++ )
     {
         bool sat = false;
-        for( int j=0; i<softClauses[i].lits.size(); j++ )
+        for( int j=0; j<softClauses[i].lits.size(); j++ )
             if ( value(softClauses[i].lits[j]) == l_True )
             {
                 sat = true;

@@ -47,10 +47,6 @@ void printResult(Solver& solver, lbool ret)
             printf("o %"PRIu64"\n", solver.getSolutionCost());
         }else if ( ret == l_False ) {
             printf("s UNSATISFIABLE\n");
-//            for (int i = 0; i < S.conflict.size(); i++) {
-                // Reverse the signs to keep the same sign as the assertion file.
-//                fprintf(res, "%s%d\n", sign(S.conflict[i]) ? "" : "-", var(S.conflict[i]) + 1);
-//            }
         } else
             printf("s UNKNOWN\n");
 }
