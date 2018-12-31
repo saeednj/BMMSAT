@@ -6,6 +6,7 @@
 *.lo
 *.o
 *.obj
+*.or
 
 # Precompiled Headers
 *.gch
@@ -30,3 +31,7 @@
 *.exe
 *.out
 *.app
+
+depend.mk
+maplesat_static
+maplesat_release
