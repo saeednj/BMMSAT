@@ -991,7 +991,11 @@ uint64_t Solver::getSolutionCost()
 
 void Solver::addSoftClause(WeightedClause& c)
 {
-    softClauses.push(c);
+    int k = softClauses.size();
+    softClauses.push();
+    softClauses[k].weight = c.weight;
+    c.lits.copyTo(softClauses[k].lits);
+    //softClauses.push(c);
 }
 
 void Solver::bayesian_update(vec<Lit>& c)
