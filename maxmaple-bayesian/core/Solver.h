@@ -328,7 +328,7 @@ protected:
     void bayesian();
     void bayesian_update(Clause& c);
     void bayesian_update(vec<Lit>& c);
-    void polarity_estimate();
+    void init_beta_dist();
 
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;

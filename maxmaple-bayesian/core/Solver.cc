@@ -816,16 +816,21 @@ lbool Solver::search(int nof_conflicts)
             action = trail.size();
 #endif
 
-            if ( learnt_clause.size() == 1 )
+            /*if ( learnt_clause.size() == 1 )
             {
                 unit_clause_learned = true;
-            }
+            }*/
 
-            if ( learnt_clause.size() == 2 )
+            /*if ( learnt_clause.size() <= 2 )
             {
                 for( int i=0; i<bayesian_update_epochs; i++ )
                     bayesian_update(learnt_clause);
-            }
+                
+                for( int i=0; i<learnt_clause.size(); i++ ) {
+                    Var v = var(learnt_clause[i]);
+                    polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                }
+            }*/
 
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
@@ -857,7 +862,7 @@ lbool Solver::search(int nof_conflicts)
 #endif
 
                 if (verbosity >= 1)
-                    printf("| %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
+                    printf("c | %9d | %7d %8d %8d | %8d %8d %6.0f | %6.3f %% |\n", 
                            (int)conflicts, 
                            (int)dec_vars - (trail_lim.size() == 0 ? trail.size() : trail_lim[0]), nClauses(), (int)clauses_literals, 
                            (int)max_learnts, nLearnts(), (double)learnts_literals/nLearnts(), progressEstimate()*100);
@@ -890,7 +895,7 @@ lbool Solver::search(int nof_conflicts)
                 double before_bayesian_time = cpuTime();
                 bayesian();
                 double after_bayesian_time = cpuTime();
-                printf("|  Rerunning Bayesian learning:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
+                printf("c |  Rerunning Bayesian learning:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
             }
 
             Lit next = lit_Undef;
@@ -979,7 +984,7 @@ uint64_t Solver::getSolutionCost()
     {
         bool sat = false;
         for( int j=0; j<softClauses[i].lits.size(); j++ )
-            if ( value(softClauses[i].lits[j]) == l_True )
+            if ( modelValue(softClauses[i].lits[j]) == l_True )
             {
                 sat = true;
                 break;
@@ -1039,7 +1044,7 @@ void Solver::bayesian_update(vec<Lit>& c)
             *p[k] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
         }
 
-        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+//        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
     }
 }
 
@@ -1094,21 +1099,16 @@ void Solver::bayesian()
     int epochs = bayesian_init_epochs;
     int n = nVars();
 
-//    vector<double> dummy(2, 0.0);
-//    vector< vector<double> > parameters(n, dummy);
-//    vector< vector<double> > updatedParams(n, dummy);
-
-//    parameters.growTo(n);
     updatedParams.growTo(n);
-
-//    for( int i=0; i<n; i++ )
-//    {
-//        parameters[i].a = (double)rand() / RAND_MAX + 1;
-//        parameters[i].b = (double)rand() / RAND_MAX + 1;
-//    }
 
     for( int k=0; k<epochs; k++ )
     {
+        for( int i=0; i<softClauses.size(); i++ )
+        {
+            for( int j=0; j<softClauses[i].weight; j++ )
+                bayesian_update(softClauses[i].lits);
+        }
+
         for( int i=0; i<nClauses(); i++ )
         {
             Clause& c = ca[clauses[i]];
@@ -1122,14 +1122,13 @@ void Solver::bayesian()
         }
     }
 
-
     for( int v=0; v<n; v++ )
     {
         polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
     }
 }
 
-void Solver::polarity_estimate()
+void Solver::init_beta_dist()
 {
     vec<int> cnt;
     cnt.growTo(nVars());
@@ -1152,6 +1151,11 @@ void Solver::polarity_estimate()
 
     int n = nVars();
     parameters.growTo(n);
+//    for( int i=0; i<n; i++ )
+//    {
+//        parameters[i].a = (double)rand() / RAND_MAX + 1;
+//        parameters[i].b = (double)rand() / RAND_MAX + 1;
+//    }
 
     for( int i=0; i<n; i++ )
     {
@@ -1173,15 +1177,17 @@ void Solver::polarity_estimate()
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
+//    printf("c DBG: nvars=%d, nclauses=%d\n", nVars(), clauses.size());
+
     model.clear();
     conflict.clear();
     if (!ok) return l_False;
 
     double before_bayesian_time = cpuTime();
-	polarity_estimate();
+	init_beta_dist();
     bayesian();
     double after_bayesian_time = cpuTime();
-    printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
+    printf("c |  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
 
     solves++;
 
@@ -1195,14 +1201,14 @@ lbool Solver::solve_()
     lbool   status            = l_Undef;
 
     if (verbosity >= 1){
-        printf("LBD Based Clause Deletion : %d\n", LBD_BASED_CLAUSE_DELETION);
-        printf("Rapid Deletion : %d\n", RAPID_DELETION);
-        printf("Almost Conflict : %d\n", ALMOST_CONFLICT);
-        printf("Anti Exploration : %d\n", ANTI_EXPLORATION);
-        printf("============================[ Search Statistics ]==============================\n");
-        printf("| Conflicts |          ORIGINAL         |          LEARNT          | Progress |\n");
-        printf("|           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |\n");
-        printf("===============================================================================\n");
+        printf("c LBD Based Clause Deletion : %d\n", LBD_BASED_CLAUSE_DELETION);
+        printf("c Rapid Deletion : %d\n", RAPID_DELETION);
+        printf("c Almost Conflict : %d\n", ALMOST_CONFLICT);
+        printf("c Anti Exploration : %d\n", ANTI_EXPLORATION);
+        printf("c ============================[ Search Statistics ]==============================\n");
+        printf("c | Conflicts |          ORIGINAL         |          LEARNT          | Progress |\n");
+        printf("c |           |    Vars  Clauses Literals |    Limit  Clauses Lit/Cl |          |\n");
+        printf("c ===============================================================================\n");
     }
 
     // Search:
@@ -1215,7 +1221,7 @@ lbool Solver::solve_()
     }
 
     if (verbosity >= 1)
-        printf("===============================================================================\n");
+        printf("c ===============================================================================\n");
 
 
     if (status == l_True){
@@ -1354,7 +1360,7 @@ void Solver::garbageCollect()
 
     relocAll(to);
     if (verbosity >= 2)
-        printf("|  Garbage collection:   %12d bytes => %12d bytes             |\n", 
+        printf("c |  Garbage collection:   %12d bytes => %12d bytes             |\n", 
                ca.size()*ClauseAllocator::Unit_Size, to.size()*ClauseAllocator::Unit_Size);
     to.moveTo(ca);
 }
