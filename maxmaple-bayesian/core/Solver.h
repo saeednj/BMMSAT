@@ -326,9 +326,9 @@ protected:
 
     // Saeed:
     void bayesian();
-    void bayesian_update(Clause& c);
-    void bayesian_update(vec<Lit>& c);
-    void init_beta_dist();
+    template<typename T>
+    void bayesian_update(T& c);
+    void init_bayesian();
 
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;

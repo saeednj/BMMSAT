@@ -1003,52 +1003,8 @@ void Solver::addSoftClause(WeightedClause& c)
     //softClauses.push(c);
 }
 
-void Solver::bayesian_update(vec<Lit>& c)
-{
-    double coeff_product = 1.0;
-    for( int j=0; j<c.size(); j++ )
-    {
-        Lit l = c[j];
-        int v = var(l);
-        int sgn = !sign(l);
-
-        updatedParams[v].a = parameters[v].a + (!sgn);
-        updatedParams[v].b = parameters[v].b + (sgn);
-
-        double coeff = (sgn ? parameters[v].b : parameters[v].a) / (parameters[v].a + parameters[v].b);
-        coeff_product *= coeff;
-    }
-    double normalization_constant = 1 - coeff_product;
-
-    for( int j=0; j<c.size(); j++ )
-    {
-        Lit l = c[j];
-        int v = var(l);
-
-        double sumP = parameters[v].a + parameters[v].b;
-        double sumUP = updatedParams[v].a + updatedParams[v].b;
-
-        double *p[2], *up[2];
-        p[0] = &parameters[v].a;
-        p[1] = &parameters[v].b;
-        up[0] = &updatedParams[v].a;
-        up[1] = &updatedParams[v].b;
-        for( int k=0; k<=1; k++ )
-        {
-            double moment1 = *p[k] / sumP - coeff_product * *up[k] / sumUP;
-            double moment2 = *p[k] * (*p[k] + 1) / ((sumP) * (sumP+1)) - coeff_product * *up[k] * (*up[k] + 1) / ((sumUP) * (sumUP+1));
-
-            moment1 /= normalization_constant;
-            moment2 /= normalization_constant;
-
-            *p[k] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
-        }
-
-//        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
-    }
-}
-
-void Solver::bayesian_update(Clause& c)
+template <typename T>
+void Solver::bayesian_update(T& c)
 {
     double coeff_product = 1.0;
     for( int j=0; j<c.size(); j++ )
@@ -1128,7 +1084,7 @@ void Solver::bayesian()
     }
 }
 
-void Solver::init_beta_dist()
+void Solver::init_bayesian()
 {
     vec<int> cnt;
     cnt.growTo(nVars());
@@ -1184,8 +1140,8 @@ lbool Solver::solve_()
     if (!ok) return l_False;
 
     double before_bayesian_time = cpuTime();
-	init_beta_dist();
-    bayesian();
+//	init_beta_dist();
+//    bayesian();
     double after_bayesian_time = cpuTime();
     printf("c |  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
 
