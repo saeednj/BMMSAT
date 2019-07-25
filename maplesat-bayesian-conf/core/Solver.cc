@@ -816,6 +816,7 @@ lbool Solver::search(int nof_conflicts)
             action = trail.size();
 #endif
 
+#if REDO_BAYESIAN_AFTER_UNIT_LEARNED
             if ( learnt_clause.size() == 1 )
             {
                 unit_clause_learned = true;
@@ -825,7 +826,24 @@ lbool Solver::search(int nof_conflicts)
             {
                 for( int i=0; i<bayesian_update_epochs; i++ )
                     bayesian_update(learnt_clause);
+
+                for( int i=0; i<learnt_clause.size(); i++ ) {
+                    Var v = var(learnt_clause[i]);
+                    polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                }
             }
+#else
+            if ( learnt_clause.size() <= 2 )
+            {
+                for( int i=0; i<bayesian_update_epochs; i++ )
+                    bayesian_update(learnt_clause);
+
+                for( int i=0; i<learnt_clause.size(); i++ ) {
+                    Var v = var(learnt_clause[i]);
+                    polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                }
+            }
+#endif
 
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
@@ -883,6 +901,7 @@ lbool Solver::search(int nof_conflicts)
 #endif
             }
 
+#if REDO_BAYESIAN_AFTER_UNIT_LEARNED
             if ( unit_clause_learned )
             {
                 unit_clause_learned = false;
@@ -892,6 +911,7 @@ lbool Solver::search(int nof_conflicts)
                 double after_bayesian_time = cpuTime();
                 printf("|  Rerunning Bayesian learning:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
             }
+#endif
 
             Lit next = lit_Undef;
             while (decisionLevel() < assumptions.size()){
@@ -972,52 +992,8 @@ static double luby(double y, int x){
     return pow(y, seq);
 }
 
-void Solver::bayesian_update(vec<Lit>& c)
-{
-    double coeff_product = 1.0;
-    for( int j=0; j<c.size(); j++ )
-    {
-        Lit l = c[j];
-        int v = var(l);
-        int sgn = !sign(l);
-
-        updatedParams[v].a = parameters[v].a + (!sgn);
-        updatedParams[v].b = parameters[v].b + (sgn);
-
-        double coeff = (sgn ? parameters[v].b : parameters[v].a) / (parameters[v].a + parameters[v].b);
-        coeff_product *= coeff;
-    }
-    double normalization_constant = 1 - coeff_product;
-
-    for( int j=0; j<c.size(); j++ )
-    {
-        Lit l = c[j];
-        int v = var(l);
-
-        double sumP = parameters[v].a + parameters[v].b;
-        double sumUP = updatedParams[v].a + updatedParams[v].b;
-
-        double *p[2], *up[2];
-        p[0] = &parameters[v].a;
-        p[1] = &parameters[v].b;
-        up[0] = &updatedParams[v].a;
-        up[1] = &updatedParams[v].b;
-        for( int k=0; k<=1; k++ )
-        {
-            double moment1 = *p[k] / sumP - coeff_product * *up[k] / sumUP;
-            double moment2 = *p[k] * (*p[k] + 1) / ((sumP) * (sumP+1)) - coeff_product * *up[k] * (*up[k] + 1) / ((sumUP) * (sumUP+1));
-
-            moment1 /= normalization_constant;
-            moment2 /= normalization_constant;
-
-            *p[k] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
-        }
-
-        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
-    }
-}
-
-void Solver::bayesian_update(Clause& c)
+template <typename T>
+void Solver::bayesian_update(T& c)
 {
     double coeff_product = 1.0;
     for( int j=0; j<c.size(); j++ )
@@ -1069,18 +1045,7 @@ void Solver::bayesian()
     int epochs = bayesian_init_epochs;
     int n = nVars();
 
-//    vector<double> dummy(2, 0.0);
-//    vector< vector<double> > parameters(n, dummy);
-//    vector< vector<double> > updatedParams(n, dummy);
-
-//    parameters.growTo(n);
     updatedParams.growTo(n);
-
-//    for( int i=0; i<n; i++ )
-//    {
-//        parameters[i].a = (double)rand() / RAND_MAX + 1;
-//        parameters[i].b = (double)rand() / RAND_MAX + 1;
-//    }
 
     for( int k=0; k<epochs; k++ )
     {
@@ -1097,14 +1062,13 @@ void Solver::bayesian()
         }
     }
 
-
     for( int v=0; v<n; v++ )
     {
         polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
     }
 }
 
-void Solver::polarity_estimate()
+void Solver::init_bayesian()
 {
     vec<int> cnt;
     cnt.growTo(nVars());
@@ -1127,6 +1091,11 @@ void Solver::polarity_estimate()
 
     int n = nVars();
     parameters.growTo(n);
+//    for( int i=0; i<n; i++ )
+//    {
+//        parameters[i].a = (double)rand() / RAND_MAX + 1;
+//        parameters[i].b = (double)rand() / RAND_MAX + 1;
+//    }
 
     for( int i=0; i<n; i++ )
     {
@@ -1153,7 +1122,7 @@ lbool Solver::solve_()
     if (!ok) return l_False;
 
     double before_bayesian_time = cpuTime();
-	polarity_estimate();
+	init_bayesian();
     bayesian();
     double after_bayesian_time = cpuTime();
     printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);

@@ -52,6 +52,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
     #error ANTI_EXPLORATION requires BRANCHING_HEURISTIC == LRB
 #endif
 
+//#ifndef REDO_BAYESIAN_AFTER_UNIT_LEARNED
+//    #define REDO_BAYESIAN_AFTER_UNIT_LEARNED true
+//#endif
+
 #include <assert.h>
 
 #include "mtl/IntTypes.h"
@@ -106,6 +110,13 @@ inline  Lit  toLit     (int i)              { Lit p; p.x = i; return p; }
 
 const Lit lit_Undef = { -2 };  // }- Useful special constants.
 const Lit lit_Error = { -1 };  // }
+
+
+// Saeed
+struct BetaDist {
+    double a, b;
+};
+
 
 
 //=================================================================================================

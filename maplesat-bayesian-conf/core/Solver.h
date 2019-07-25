@@ -30,10 +30,6 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 namespace Minisat {
 
-struct BayesParam {
-    double a, b;
-};
-
 //=================================================================================================
 // Solver -- the main class:
 
@@ -325,11 +321,12 @@ protected:
     // Saeed:
     // extra:
     void bayesian();
-    void bayesian_update(Clause& c);
-    void bayesian_update(vec<Lit>& c);
-    void polarity_estimate();
-    vec<BayesParam> parameters;
-    vec<BayesParam> updatedParams;
+    template<typename T>
+    void bayesian_update(T& c);
+    void init_bayesian();
+
+    vec<BetaDist> parameters;
+    vec<BetaDist> updatedParams;
 
     int bayesian_init_epochs;
     int bayesian_update_epochs;
