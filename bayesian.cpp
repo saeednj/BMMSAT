@@ -6,7 +6,10 @@
 #include <sstream>
 using namespace std;
 
+#define COUNT_UNSAT true
+
 typedef vector<int> Clause;
+struct BetaDist { double a, b; };
 
 void parse(vector<Clause>& cs, int &nVars)
 {
@@ -34,84 +37,135 @@ void parse(vector<Clause>& cs, int &nVars)
     assert(nc == cs.size());
 }
 
-int main()
+class Bayesian {
+    public:
+        Bayesian(int n, vector<Clause>& cs)
+            :nvars(n), clauses(cs)
+        {
+            parameters.resize(nvars);
+            updatedParams.resize(nvars);
+        }
+        ~Bayesian(){}
+
+        void init(int type = 0);
+        void update(Clause& c);
+        void main(int epochs);
+        void getAssignment(vector<int>& assign);
+
+        vector<Clause>& clauses;
+        int nvars;
+        vector<BetaDist> parameters;
+        vector<BetaDist> updatedParams;
+};
+
+void Bayesian::init(int type)
 {
-    int nVars;
-
-    int epochs = 100;
-
-    srand(time(NULL));
-
-    vector<Clause> cs;
-    parse(cs, nVars);
-
-    vector<double> dummy(2, 0.0);
-    vector<vector<double>> parameters(nVars, dummy);
-    vector<vector<double>> updatedParams(nVars, dummy);
-
-    for( auto &x : parameters )
+    if ( type == 0 )
     {
-        x[0] = (double)rand() / RAND_MAX + 1;
-        x[1] = (double)rand() / RAND_MAX + 1;
+        for( int i=0; i<nvars; i++ )
+        {
+            parameters[i].a = (double)rand() / RAND_MAX + 1;
+            parameters[i].b = (double)rand() / RAND_MAX + 1;
+        }
     }
-//    parameters[0][0] = 1.05;
-//    parameters[1][0] = 10;
+    else if ( type == 1 )
+    {
+        vector<int> cnt(nvars, 0);
 
-//    printf("%lf\n", lgamma(1000));
+        for( Clause& c : clauses )
+        {
+            for( int j=0; j<c.size(); j++ )
+            {
+                int v = abs(c[j]) - 1;
+                if ( c[j] > 0 )
+                    cnt[v]++;
+                else
+                    cnt[v]--;
+            }
+        }
 
-    vector<int> assign(nVars, 0);
-    int best = cs.size() + 1;
-    vector<vector<double>> bestSolution;
+        for( int i=0; i<nvars; i++ )
+        {
+            if ( cnt[i] > 0 )
+            {
+                parameters[i].a = 10 - (double)rand() / RAND_MAX;
+                parameters[i].b =  0 + (double)rand() / RAND_MAX;
+            }
+            else
+            {
+                parameters[i].a =  0 + (double)rand() / RAND_MAX;
+                parameters[i].b = 10 - (double)rand() / RAND_MAX;
+            }
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Wrong init mode\n");
+        abort();
+    }
+}
+
+void Bayesian::update(Clause &c)
+{
+    double coeff_product = 1.0;
+    for( int lit : c )
+    {
+        int v = abs(lit) - 1;
+        int sgn = (lit > 0);
+
+        updatedParams[v].a = parameters[v].a + (!sgn);
+        updatedParams[v].b = parameters[v].b + (sgn);
+
+        double coeff = (sgn ? parameters[v].b : parameters[v].a) / (parameters[v].a + parameters[v].b);
+        coeff_product *= coeff;
+    }
+    double normalization_constant = 1 - coeff_product;
+
+    for( int lit : c )
+    {
+        int v = abs(lit) - 1;
+
+        double sumP = parameters[v].a + parameters[v].b;
+        double sumUP = updatedParams[v].a + updatedParams[v].b;
+
+        double *p[2], *up[2];
+        p[0] = &parameters[v].a;
+        p[1] = &parameters[v].b;
+        up[0] = &updatedParams[v].a;
+        up[1] = &updatedParams[v].b;
+        for( int k=0; k<=1; k++ )
+        {
+            double moment1 = *p[k] / sumP - coeff_product * *up[k] / sumUP;
+            double moment2 = *p[k] * (*p[k] + 1) / ((sumP) * (sumP+1)) - coeff_product * *up[k] * (*up[k] + 1) / ((sumUP) * (sumUP+1));
+
+            moment1 /= normalization_constant;
+            moment2 /= normalization_constant;
+
+            *p[k] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
+        }
+    }
+}
+
+
+
+void Bayesian::main(int epochs)
+{
+#ifdef COUNT_UNSAT
+    vector<int> assign(nvars, 0);
+    int best = clauses.size() + 1;
+    vector<BetaDist> bestSolution;
     int bestK;
+#endif
 
-//    for( double x=1; x<101; x*=10)
-//        printf("gamma %.2lf: %.6lf\n", x, tgamma(x));
     for( int k=0; k<epochs; k++ )
     {
-        for( Clause &c : cs )
-        {
-            double coeff_product = 1.0;
-            for( int lit : c )
-            {
-                int v = abs(lit) - 1;
-                int sign = (lit > 0);
+        for( Clause& c : clauses )
+            update(c);
 
-                updatedParams[v][0] = parameters[v][0] + (!sign);
-                updatedParams[v][1] = parameters[v][1] + (sign);
-
-                double coeff = (sign ? parameters[v][1] : parameters[v][0]) / (parameters[v][0] + parameters[v][1]);
-                coeff_product *= coeff;
-            }
-            double normalization_constant = 1 - coeff_product;
-
-            for( int lit : c )
-            {
-                int v = abs(lit) - 1;
-                int sign = (lit > 0);
-
-                double sumP = parameters[v][0] + parameters[v][1];
-                double sumUP = updatedParams[v][0] + updatedParams[v][1];
-
-                for( int i=0; i<=1; i++ )
-                {
-                    double moment1 = parameters[v][i] / sumP - coeff_product * updatedParams[v][i] / sumUP;
-                    double moment2 = parameters[v][i] * (parameters[v][i] + 1) / ((sumP) * (sumP+1)) - coeff_product * updatedParams[v][i] * (updatedParams[v][i] + 1) / ((sumUP) * (sumUP+1));
-
-                    moment1 /= normalization_constant;
-                    moment2 /= normalization_constant;
-
-                    parameters[v][i] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
-                }
-            }
-        }
-
-        for( int v=0; v<nVars; v++ )
-        {
-            assign[v] = (parameters[v][0] > parameters[v][1]) ? 1 : -1;
-        }
-        
+#ifdef COUNT_UNSAT
+        getAssignment(assign);
         int unsat = 0;
-        for( Clause& c : cs )
+        for( Clause& c : clauses )
         {
             bool sat = false;
             for( int lit : c )
@@ -128,50 +182,46 @@ int main()
             bestK = k + 1;
         }
         if ( unsat == 0 ) break;
-        
+#endif
     }
 
-/*    for( int t=0; t<(1<<nVars); t++ )
-    {
-        for( double x=0.05; x<0.99; x+=0.05 )
-        { 
-            double total_log_prob = 0.0;
-            double total_prob = 1.0;
-            for( int v=0; v<nVars; v++ )
-            {
-                double val = ( (t & (1 << v)) > 0 ) ? x : 1-x;
-                double a = parameters[v][0];
-                double b = parameters[v][1];
-                double logp = lgamma(a + b) - lgamma(a) - lgamma(b) + (a-1)*log(val) + (b-1)*log(1-val);
-                double p = (tgamma(a + b) / (tgamma(a) * tgamma(b))) * pow(val, a-1) * pow(1-val, b-1);
-                total_log_prob += logp;
-                total_prob *= p;
-                //            printf("(DBG: a=%.6lf, b=%.6lf, p=%.6lf) ", a, b, p);
-                printf("%3d ", ( (t & (1 << v)) > 0 ) ? v+1 : -(v+1));
-            }
-            //printf("%.6lf\n", exp(total_log_prob));
-            printf("%.2lf %.6lf\n", x, total_log_prob);
-        }
-    }*/
-
+#ifdef COUNT_UNSAT
     if ( best == 0 )
     {
         printf("SAT! converged after %d steps:\n", bestK);
-        for( int v=0; v<nVars; v++ )
+        for( int v=0; v<nvars; v++ )
             printf("%d ", (v+1) * assign[v]);
         printf("\n");
     }
     else
     {
         printf("UNDET! converged after %d steps:\n", bestK);
-        printf("at least %d clauses remained unsat (out of %d)\n", best, cs.size());
+        printf("at least %d clauses remained unsat (out of %lu)\n", best, clauses.size());
     }
+#endif
+}
 
-//    for( int v=0; v<nVars; v++ )
-//        printf("%d : %.6lf\n", v+1, bestSolution[v][0] / (bestSolution[v][0] + bestSolution[v][1]));
-//    printf("Parameters:\n");
-//    for( int v=0; v<nVars; v++ )
-//        printf("%d : %.6lf\n", v+1, parameters[v][0] / (parameters[v][0] + parameters[v][1]));
+void Bayesian::getAssignment(vector<int>& assign)
+{
+    for( int v=0; v<nvars; v++ )
+    {
+        assign[v] = (parameters[v].a > parameters[v].b) ? 1 : -1;
+    }
+}
+
+int main()
+{
+    int epochs = 100;
+
+    srand(time(NULL));
+
+    int nVars;
+    vector<Clause> cs;
+    parse(cs, nVars);
+
+    Bayesian b(nVars, cs);
+    b.init();
+    b.main(epochs);
 
     return 0;
 }
