@@ -27,6 +27,13 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
 
+#define MAX(x, y) (((x) < (y)) ? (y) : (x))
+#define ABSDIFF(x, y) (((x) < (y)) ? ((y) - (x)) : ((x) - (y)))
+#define BayesianWeight_Max(v) (MAX(parameters[v].a, parameters[v].b) / (parameters[v].a + parameters[v].b))
+//#define Bayesian_Weight_Min(v) (1 - (ABSDIFF(parameters[v].a, parameters[v].b) / (2 * (parameters[v].a + parameters[v].b))))
+#define BayesianWeight_Min(v) (1.5 - BayesianWeight_Max(v))
+
+#define BayesianWeight(v) BayesianWeight_Max(v)
 
 namespace Minisat {
 
@@ -328,9 +335,10 @@ protected:
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;
 
-    int bayesian_init_epochs;
-    int bayesian_update_epochs;
-    bool unit_clause_learned;
+    bool bayesian_polarity;     // config variable: Turn on/off BMM for polarity initialization
+    bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
+    int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
+    int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
 };
 
 
