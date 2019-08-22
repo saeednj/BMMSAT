@@ -1,0 +1,10 @@
+#!/bin/sh
+
+rm -rf m4ri-20140914
+tar zxvf m4ri-20140914.tar.gz
+cd m4ri-20140914
+./configure && make
+
+cd ../MapleCOMSPS_LRB_VSIDS_2/simp
+MROOT=.. make clean rs
+cp -f ./minisat_static ../../bin/MapleCOMSPS_LRB_VSIDS_2
