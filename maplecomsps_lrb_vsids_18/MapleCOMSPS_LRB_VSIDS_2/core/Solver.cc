@@ -59,6 +59,13 @@ static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bay
 static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 50, IntRange(0, 1000));
 static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 5, IntRange(0, 1000));
 
+static BoolOption    opt_rnd_init_pol      (_cat, "rnd-polarity",    "Randomize the initial polarity", false);
+static BoolOption    opt_freq_cnt_pol      (_cat, "freq-cnt-pol",    "Frequency based polarity initialization", false);
+static BoolOption    opt_freq_cnt_act      (_cat, "freq-cnt-act",    "Frequency based activity initialization", false);
+static BoolOption    opt_jw_pol      (_cat, "jw-pol",    "Jeroslow-Wang based polarity initialization", false);
+static BoolOption    opt_jw_act      (_cat, "jw-act",    "Jeroslow-Wang based activity initialization", false);
+
+
 //=================================================================================================
 // Constructor/Destructor:
 
@@ -132,6 +139,12 @@ Solver::Solver() :
   , bayesian_activity(opt_bayesian_activity)
   , bayesian_init_epochs(opt_bayesian_init_epochs)
   , bayesian_update_epochs(opt_bayesian_update_epochs)
+
+  , rnd_init_polarity(opt_rnd_init_pol)
+  , freq_cnt_pol (opt_freq_cnt_pol)
+  , freq_cnt_act (opt_freq_cnt_act)
+  , jw_pol (opt_jw_pol)
+  , jw_act (opt_jw_act)
 {}
 
 
@@ -165,7 +178,7 @@ Var Solver::newVar(bool sign, bool dvar)
 
     seen     .push(0);
     seen2    .push(0);
-    polarity .push(sign);
+    polarity .push(rnd_init_polarity ? (drand(random_seed) < 0.5 ? true : false) : sign);
     decision .push();
     trail    .capacity(v+1);
     setDecisionVar(v, dvar);
@@ -1314,12 +1327,60 @@ void Solver::init_bayesian()
 //		}
 //    }
 }
+
+void Solver::frequency_count_init()
+{
+    vec<int> cnt;
+    int n = nVars();
+    cnt.growTo(2 * n);
+
+    for( int v=0; v<2*n; v++ )
+        cnt[v] = 0;
+
+    for( int i=0; i<nClauses(); i++ )
+    {
+        Clause& c = ca[clauses[i]];
+        for( int j=0; j<c.size(); j++ )
+        {
+            Lit q = c[j];
+            if ( sign(q) )
+                cnt[var(q) + n]++;
+            else
+                cnt[var(q)]++;
+        }
+    }
+
+    if ( freq_cnt_pol )
+    {
+        for( int v=0; v<n; v++ )
+            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
+    }
+
+    if ( freq_cnt_act )
+    {
+    }
+}
+
+void Solver::jeroslow_wang_init()
+{
+}
+
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
 {
     model.clear();
     conflict.clear();
     if (!ok) return l_False;
+
+    if ( freq_cnt_pol || freq_cnt_act )
+    {
+        frequency_count_init();
+    }
+
+    if ( jw_pol || jw_act )
+    {
+        jeroslow_wang_init();
+    }
 
     if ( bayesian_polarity || bayesian_activity )
     {

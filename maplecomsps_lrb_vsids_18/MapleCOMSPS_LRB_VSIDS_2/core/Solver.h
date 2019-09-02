@@ -452,6 +452,15 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
     int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
     int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
+
+    bool rnd_init_polarity;
+    bool freq_cnt_pol;
+    bool freq_cnt_act;
+    void frequency_count_init();
+
+    bool jw_pol;
+    bool jw_act;
+    void jeroslow_wang_init();
 };
 
 
