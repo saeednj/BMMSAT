@@ -1363,6 +1363,41 @@ void Solver::frequency_count_init()
 
 void Solver::jeroslow_wang_init()
 {
+    vec<double> cnt;
+    int n = nVars();
+    cnt.growTo(2 * n);
+    for( int v=0; v<2*n; v++ )
+        cnt[v] = 0.0;
+
+    for( int i=0; i<nClauses(); i++ )
+    {
+        Clause& c = ca[clauses[i]];
+        double sc = pow(2, -c.size());
+        for( int j=0; j<c.size(); j++ )
+        {
+            Lit q = c[j];
+            if ( sign(q) )
+                cnt[var(q) + n] += sc;
+            else
+                cnt[var(q)] += sc;
+        }
+    }
+
+    if ( jw_pol )
+    {
+        for( int v=0; v<n; v++ )
+            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
+    }
+
+    if ( jw_act )
+    {
+        int m = nClauses();
+        if ( m == 0 ) m = 1;
+        for( int v=0; v<n; v++ )
+        {
+            activity_CHB[v] = activity_VSIDS[v] = (cnt[v] + cnt[v+n]) / m;
+        }
+    }
 }
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
