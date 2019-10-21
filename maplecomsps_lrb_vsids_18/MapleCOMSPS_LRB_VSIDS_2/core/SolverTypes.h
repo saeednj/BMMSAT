@@ -75,7 +75,6 @@ const Lit lit_Undef = { -2 };  // }- Useful special constants.
 const Lit lit_Error = { -1 };  // }
 
 
-// Saeed
 struct BetaDist {
     double a, b;
 };

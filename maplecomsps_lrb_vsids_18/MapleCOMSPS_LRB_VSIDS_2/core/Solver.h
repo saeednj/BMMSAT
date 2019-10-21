@@ -438,8 +438,6 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     inline bool implExistsByBin(Lit p, bool use_bin_learnts) const;
     inline bool isRoot(Lit p, bool use_bin_learnts) const;
 
-    // Saeed:
-    // extra:
     void bayesian();
     template<typename T>
     void bayesian_update(T& c);
