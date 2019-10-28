@@ -1,0 +1,11 @@
+#!/bin/sh
+
+if [ "$1" = "clean" ]; then
+    cd sources/simp
+    make clean
+else
+    cd sources/simp
+    make rs
+    cp glucose_static ../../bin/maplelcmdistchronobt
+fi
+
