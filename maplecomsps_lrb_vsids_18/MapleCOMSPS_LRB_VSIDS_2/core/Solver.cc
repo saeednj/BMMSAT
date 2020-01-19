@@ -1013,7 +1013,7 @@ lbool Solver::search(int& nof_conflicts)
             analyze(confl, learnt_clause, backtrack_level, lbd);
             cancelUntil(backtrack_level);
 
-            if ( bayesian_polarity )
+            if ( bayesian_polarity && bayesian_update_epochs > 0 )
             {
                 if ( learnt_clause.size() <= 2 )
                 {

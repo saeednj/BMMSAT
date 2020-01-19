@@ -1,0 +1,22 @@
+To compile:
+./starexec_build
+
+To run:
+
+Baseline version:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -no-init-activity -no-init-polarity {input_cnf_file}
+
+with BMM-polarity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -init-polarity -no-init-activity {input_cnf_file} 
+
+with BMM-activity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -no-init-polarity -init-activity {input_cnf_file}
+
+with Combined BMM-activity and BMM-polarity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -init-activity -init-polarity {input_cnf_file}
+
+
+
+
+Description of additional flags:
+./bin/MapleCOMSPS_LRB_VSIDS_2 --help-verb
