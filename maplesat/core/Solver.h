@@ -213,6 +213,7 @@ protected:
     double              cla_inc;          // Amount to bump next clause with.
 #endif
     vec<double>         activity;         // A heuristic measurement of the activity of a variable.
+    vec<double>         activity_distance;
     double              var_inc;          // Amount to bump next variable with.
     OccLists<Lit, vec<Watcher>, WatcherDeleted>
                         watches;          // 'watches[lit]' is a list of constraints watching 'lit' (will go there if literal becomes true).
@@ -226,7 +227,8 @@ protected:
     int                 simpDB_assigns;   // Number of top-level assignments since last execution of 'simplify()'.
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
-    Heap<VarOrderLt>    order_heap;       // A priority queue of variables ordered with respect to the variable activity.
+    Heap<VarOrderLt>    order_heap_LRB;       // A priority queue of variables ordered with respect to the variable activity.
+    Heap<VarOrderLt>    order_heap_distance;
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -329,6 +331,14 @@ protected:
 
     // Saeed:
     // extra:
+    bool DISTANCE;
+    vec<double> var_iLevel_tmp;
+    vec<Lit> involved_lits;
+    vec<int> pathCs;
+    double var_iLevel_inc;
+    bool collectFirstUIP(CRef confl);
+    double    my_var_decay;
+
     void bayesian();
     template<typename T>
     void bayesian_update(T& c);
@@ -362,6 +372,7 @@ inline CRef Solver::reason(Var x) const { return vardata[x].reason; }
 inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
+    Heap<VarOrderLt> &order_heap = DISTANCE ? order_heap_distance : order_heap_LRB;
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 #if BRANCHING_HEURISTIC == VSIDS
@@ -421,7 +432,11 @@ inline void     Solver::setDecisionVar(Var v, bool b)
     else if (!b &&  decision[v]) dec_vars--;
 
     decision[v] = b;
-    insertVarOrder(v);
+    if (b && !order_heap_LRB.inHeap(v)) {
+        order_heap_LRB.insert(v);
+        order_heap_distance.insert(v);
+    }
+//    insertVarOrder(v);
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }

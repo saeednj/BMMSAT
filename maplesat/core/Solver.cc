@@ -62,8 +62,8 @@ static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward m
 //static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bayesian moment matching for activity initialization", false);
 //static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 10, IntRange(0, 1000));
 //static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 1, IntRange(0, 1000));
-static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0,5));
-static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0,5));
+static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
+static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
 static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
 static IntOption     opt_update_epochs            (_cat, "update-epochs", "Number of Epochs for updating polarity/activity weights using a conflict clause", 1, IntRange(0, 1000));
 
@@ -131,7 +131,7 @@ Solver::Solver() :
   , qhead              (0)
   , simpDB_assigns     (-1)
   , simpDB_props       (0)
-  , order_heap         (VarOrderLt(activity))
+  , order_heap_LRB         (VarOrderLt(activity))
   , progress_estimate  (0)
   , remove_satisfied   (true)
 
@@ -145,6 +145,11 @@ Solver::Solver() :
   , activity_init_method(opt_activity_init_method)
   , init_epochs(opt_init_epochs)
   , update_epochs(opt_update_epochs)
+
+  , DISTANCE(opt_activity_init_method == DIST)
+  , order_heap_distance(VarOrderLt(activity_distance))
+  , var_iLevel_inc     (1)
+  , my_var_decay       (0.6)
 
 {}
 
@@ -178,6 +183,11 @@ Var Solver::newVar(bool sign, bool dvar)
     lbd_seen.push(0);
     picked.push(0);
     conflicted.push(0);
+
+    var_iLevel_tmp.push(0);
+    pathCs.push(0);
+    activity_distance.push(0);
+
 #if ALMOST_CONFLICT
     almost_conflicted.push(0);
 #endif
@@ -284,11 +294,11 @@ void Solver::cancelUntil(int level) {
 #endif
                 double old_activity = activity[x];
                 activity[x] = step_size * adjusted_reward + ((1 - step_size) * old_activity);
-                if (order_heap.inHeap(x)) {
+                if (order_heap_LRB.inHeap(x)) {
                     if (activity[x] > old_activity)
-                        order_heap.decrease(x);
+                        order_heap_LRB.decrease(x);
                     else
-                        order_heap.increase(x);
+                        order_heap_LRB.increase(x);
                 }
 #endif
                 total_actual_rewards[x] += reward;
@@ -313,6 +323,7 @@ void Solver::cancelUntil(int level) {
 
 Lit Solver::pickBranchLit()
 {
+    Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : order_heap_LRB;
     Var next = var_Undef;
 
     // Random decision:
@@ -566,8 +577,8 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     if (age > 0) {
         double decay = pow(0.95, age);
         activity[var(p)] *= decay;
-        if (order_heap.inHeap(var(p))) {
-            order_heap.increase(var(p));
+        if (order_heap_LRB.inHeap(var(p))) {
+            order_heap_LRB.increase(var(p));
         }
     }
 #endif
@@ -731,7 +742,8 @@ void Solver::rebuildOrderHeap()
     for (Var v = 0; v < nVars(); v++)
         if (decision[v] && value(v) == l_Undef)
             vs.push(v);
-    order_heap.build(vs);
+    order_heap_LRB.build(vs);
+    order_heap_distance.build(vs);
 }
 
 
@@ -766,6 +778,97 @@ bool Solver::simplify()
     return true;
 }
 
+// pathCs[k] is the number of variables assigned at level k,
+// it is initialized to 0 at the begining and reset to 0 after the function execution
+bool Solver::collectFirstUIP(CRef confl){
+    involved_lits.clear();
+    int max_level=1;
+    Clause& c=ca[confl]; int minLevel=decisionLevel();
+    for(int i=0; i<c.size(); i++) {
+        Var v=var(c[i]);
+        //        assert(!seen[v]);
+        if (level(v)>0) {
+            seen[v]=1;
+            var_iLevel_tmp[v]=1;
+            pathCs[level(v)]++;
+            if (minLevel>level(v)) {
+                minLevel=level(v);
+                assert(minLevel>0);
+            }
+            //    varBumpActivity(v);
+        }
+    }
+
+    int limit=trail_lim[minLevel-1];
+    for(int i=trail.size()-1; i>=limit; i--) {
+        Lit p=trail[i]; Var v=var(p);
+        if (seen[v]) {
+            int currentDecLevel=level(v);
+            //      if (currentDecLevel==decisionLevel())
+            //      	varBumpActivity(v);
+            seen[v]=0;
+            if (--pathCs[currentDecLevel]!=0) {
+                Clause& rc=ca[reason(v)];
+                int reasonVarLevel=var_iLevel_tmp[v]+1;
+                if(reasonVarLevel>max_level) max_level=reasonVarLevel;
+                if (rc.size()==2 && value(rc[0])==l_False) {
+                    // Special case for binary clauses
+                    // The first one has to be SAT
+                    assert(value(rc[1]) != l_False);
+                    Lit tmp = rc[0];
+                    rc[0] =  rc[1], rc[1] = tmp;
+                }
+                for (int j = 1; j < rc.size(); j++){
+                    Lit q = rc[j]; Var v1=var(q);
+                    if (level(v1) > 0) {
+                        if (minLevel>level(v1)) {
+                            minLevel=level(v1); limit=trail_lim[minLevel-1]; 	assert(minLevel>0);
+                        }
+                        if (seen[v1]) {
+                            if (var_iLevel_tmp[v1]<reasonVarLevel)
+                                var_iLevel_tmp[v1]=reasonVarLevel;
+                        }
+                        else {
+                            var_iLevel_tmp[v1]=reasonVarLevel;
+                            //   varBumpActivity(v1);
+                            seen[v1] = 1;
+                            pathCs[level(v1)]++;
+                        }
+                    }
+                }
+            }
+            involved_lits.push(p);
+        }
+    }
+    double inc=var_iLevel_inc;
+    vec<int> level_incs; level_incs.clear();
+    for(int i=0;i<max_level;i++){
+        level_incs.push(inc);
+        inc = inc/my_var_decay;
+    }
+
+    for(int i=0;i<involved_lits.size();i++){
+        Var v =var(involved_lits[i]);
+        //        double old_act=activity_distance[v];
+        //        activity_distance[v] +=var_iLevel_inc * var_iLevel_tmp[v];
+        activity_distance[v]+=var_iLevel_tmp[v]*level_incs[var_iLevel_tmp[v]-1];
+
+        if(activity_distance[v]>1e100){
+            for(int vv=0;vv<nVars();vv++)
+                activity_distance[vv] *= 1e-100;
+            var_iLevel_inc*=1e-100;
+            for(int j=0; j<max_level; j++) level_incs[j]*=1e-100;
+        }
+        if (order_heap_distance.inHeap(v))
+            order_heap_distance.decrease(v);
+
+        //        var_iLevel_inc *= (1 / my_var_decay);
+    }
+    var_iLevel_inc=level_incs[level_incs.size()-1];
+    return true;
+}
+
+
 /*_________________________________________________________________________________________________
 |
 |  search : (nof_conflicts : int) (params : const SearchParams&)  ->  [lbool]
@@ -798,11 +901,11 @@ lbool Solver::search(int nof_conflicts)
             double reward = multiplier / age ;
             double old_activity = activity[v];
             activity[v] = step_size * reward + ((1 - step_size) * old_activity);
-            if (order_heap.inHeap(v)) {
+            if (order_heap_LRB.inHeap(v)) {
                 if (activity[v] > old_activity)
-                    order_heap.decrease(v);
+                    order_heap_LRB.decrease(v);
                 else
-                    order_heap.increase(v);
+                    order_heap_LRB.increase(v);
             }
         }
 #endif
@@ -816,6 +919,10 @@ lbool Solver::search(int nof_conflicts)
             if (decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
+            if(conflicts>50000) DISTANCE=0;
+            else DISTANCE=1;
+            if(DISTANCE)
+                collectFirstUIP(confl);
             analyze(confl, learnt_clause, backtrack_level);
 
             cancelUntil(backtrack_level);
@@ -1026,7 +1133,6 @@ void Solver::bayesian_update(T& c)
 
 void Solver::bayesian()
 {
-    //printf("DBG: nvars: %d, nclauses: %d\n", nVars(), nClauses());
     int n = nVars();
 
     updatedParams.growTo(n);
@@ -1314,7 +1420,7 @@ lbool Solver::solve_()
         for( Var v=0; v<nVars(); v++ ) activity[v] = drand(random_seed) * 0.00001;
     }
     double after_init_time = cpuTime();
-    printf("|  Polarity and/or Activity initialization time:  %12.2f s                                     |\n", after_init_time - before_init_time);
+    printf("|  Initialization time:  %12.2f s                                       |\n", after_init_time - before_init_time);
 
     solves++;
 
