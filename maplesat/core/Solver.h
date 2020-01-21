@@ -337,15 +337,21 @@ protected:
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;
 
-    bool bayesian_polarity;     // config variable: Turn on/off BMM for polarity initialization
-    bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
-    int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
-    int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
+    //InitMethod polarity_init_method;
+    //InitMethod activity_init_method;
+    int polarity_init_method;
+    int activity_init_method;
+
+    
+    int init_epochs;   // config variable: Number of epochs for initialization
+    int update_epochs; // config variable: Number of epochs on each conflit clause update
 
     std::map<int, std::vector<int>> literalLookup;
     std::vector<std::map<int, double>> survey_p;
     void survey_propogation();
     void survey_update(Clause &a, int clause_id);
+
+    void jeroslow_wang_init();
 };
 
 

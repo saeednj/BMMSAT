@@ -62,8 +62,10 @@ static DoubleOption  opt_reward_multiplier (_cat, "reward-multiplier", "Reward m
 //static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bayesian moment matching for activity initialization", false);
 //static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 10, IntRange(0, 1000));
 //static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 1, IntRange(0, 1000));
-static IntOption     opt_polarity_init     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST)", 0, IntRange(0,4));
-static IntOption     opt_activity_init     (_cat, "act-init", "Activity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST)", 0, IntRange(0,4));
+static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0,5));
+static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0,5));
+static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
+static IntOption     opt_update_epochs            (_cat, "update-epochs", "Number of Epochs for updating polarity/activity weights using a conflict clause", 1, IntRange(0, 1000));
 
 
 
@@ -139,11 +141,10 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 
-    // Bayesian configs
-  , bayesian_polarity(opt_bayesian_polarity)
-  , bayesian_activity(opt_bayesian_activity)
-  , bayesian_init_epochs(opt_bayesian_init_epochs)
-  , bayesian_update_epochs(opt_bayesian_update_epochs)
+  , polarity_init_method(opt_polarity_init_method)
+  , activity_init_method(opt_activity_init_method)
+  , init_epochs(opt_init_epochs)
+  , update_epochs(opt_update_epochs)
 
 {}
 
@@ -167,8 +168,9 @@ Var Solver::newVar(bool sign, bool dvar)
     watches  .init(mkLit(v, true ));
     assigns  .push(l_Undef);
     vardata  .push(mkVarData(CRef_Undef, 0));
-    //activity .push(0);
-    activity .push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+    activity .push(0);
+    //activity .push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+    //activity .push(activity_init_method == RANDOM ? drand(random_seed) * 0.00001 : 0);
     seen     .push(0);
     polarity .push(sign);
     decision .push();
@@ -822,19 +824,23 @@ lbool Solver::search(int nof_conflicts)
             action = trail.size();
 #endif
 
-            if ( bayesian_polarity )
+            if ( polarity_init_method == BMM || activity_init_method == BMM )
             {
                 if ( learnt_clause.size() <= 2 )
                 {
-                    for( int i=0; i<bayesian_update_epochs; i++ )
+                    for( int i=0; i<update_epochs; i++ )
                         bayesian_update(learnt_clause);
 
                     for( int i=0; i<learnt_clause.size(); i++ ) {
                         Var v = var(learnt_clause[i]);
-                        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                        if ( polarity_init_method == BMM )
+                            polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                        if ( activity_init_method == BMM )
+                            activity[v] = BayesianWeight(v);
                     }
                 }
             }
+
 
             if (learnt_clause.size() == 1){
                 uncheckedEnqueue(learnt_clause[0]);
@@ -1025,7 +1031,7 @@ void Solver::bayesian()
 
     updatedParams.growTo(n);
 
-    for( int k=0; k<bayesian_init_epochs; k++ )
+    for( int k=0; k<init_epochs; k++ )
     {
         for( int i=0; i<nClauses(); i++ )
         {
@@ -1040,7 +1046,7 @@ void Solver::bayesian()
         }
     }
 
-    if ( bayesian_polarity )
+    if ( polarity_init_method == BMM )
     {
         for( int v=0; v<n; v++ )
         {
@@ -1048,7 +1054,7 @@ void Solver::bayesian()
         }
     }
 
-    if ( bayesian_activity )
+    if ( activity_init_method == BMM )
     {
         for( int v=0; v<n; v++ )
         {
@@ -1101,19 +1107,61 @@ void Solver::init_bayesian()
 //    }
 }
 
+void Solver::survey_update(Clause &a, int clause_id) {
+	vector<double> p(a.size(), 0.0);
+	double product = 1.0;
+	for(unsigned int i = 0; i < a.size(); i++){
+		double pu = 1.0;
+		double ps = 1.0;
+		Lit l = a[i];
+		int v = var(l);
+		if(sign(l)){
+			v = -(v+1); 
+		} else{
+			v = v+1;
+		}
+		if(this->literalLookup.count(v) != 0){
+			vector<int> vs = literalLookup[v];
+			for(unsigned int j = 0; j < vs.size(); j++){
+				if(vs[j] != clause_id){
+					ps *= (1 - survey_p[vs[j]][abs(v)]);
+				}
+			}
+		}
 
-void printVectorInt(vector<int> a){
-	int l = a.size();
-	for(int i = 0; i < l; i++){
-		cout << a[i] << " ";
+		if(literalLookup.count(-v) != 0){
+			vector<int> vu = literalLookup[-v];
+			for(unsigned int j = 0; j < vu.size(); j++){
+				pu *= (1 - survey_p[vu[j]][abs(v)]);
+			}
+		}
+
+		double r1 = (1 - pu) * ps;
+		double r2 = (1 - ps) * pu;
+		double r3 = ps * pu;
+		p[i] = r1 / (r1 + r2 + r3);
+		product *= p[i];
 	}
-	cout << endl;
+
+	for(unsigned int i = 0; i < a.size(); i++){
+		int v = 1 + var(a[i]);
+		survey_p[clause_id][v] = product / p[i];
+		//cout << clause_id << " " << v << " " << survey_p[clause_id][abs(v)] << endl;
+	}
 }
+
+//void printVectorInt(vector<int> a){
+//	int l = a.size();
+//	for(int i = 0; i < l; i++){
+//		cout << a[i] << " ";
+//	}
+//	cout << endl;
+//}
 
 
 void Solver::survey_propogation(){
 
-    int epochs = bayesian_init_epochs;
+    int epochs = init_epochs;
     int num_literal = nVars();
     int num_clauses = nClauses();
 
@@ -1169,36 +1217,79 @@ void Solver::survey_propogation(){
     }
 
     for(int i = 0; i < num_literal; i++){
-	    double p_positive = 1.0;
-	    double p_negative = 1.0;
-	    if(literalLookup.count(i+1) != 0){
-		    vector<int> clause_plus = literalLookup[i+1];
-		    for(unsigned int j = 0; j < clause_plus.size(); j++){
-			    //cout << survey_p[clause_plus[j]][i+1] << endl;
-			    p_positive *= (1 - survey_p[clause_plus[j]][i+1]);
-		    }
-	    }
+        double p_positive = 1.0;
+        double p_negative = 1.0;
+        if(literalLookup.count(i+1) != 0){
+            vector<int> clause_plus = literalLookup[i+1];
+            for(unsigned int j = 0; j < clause_plus.size(); j++){
+                //cout << survey_p[clause_plus[j]][i+1] << endl;
+                p_positive *= (1 - survey_p[clause_plus[j]][i+1]);
+            }
+        }
 
 
-	    if(literalLookup.count(-(i+1)) != 0){
-		    vector<int> clause_negative = literalLookup[-(i+1)];
-		    for(unsigned int j = 0; j < clause_negative.size(); j++){
-			    p_negative *= (1 - survey_p[clause_negative[j]][i+1]);
-		    }
-	    }
-		probability[i] = p_negative / (p_positive + p_negative);
-		//cout << probability[i] << endl;
-		//cout << p_negative <<  "  " << p_positive << endl;
+        if(literalLookup.count(-(i+1)) != 0){
+            vector<int> clause_negative = literalLookup[-(i+1)];
+            for(unsigned int j = 0; j < clause_negative.size(); j++){
+                p_negative *= (1 - survey_p[clause_negative[j]][i+1]);
+            }
+        }
+        probability[i] = p_negative / (p_positive + p_negative);
+        //cout << probability[i] << endl;
+        //cout << p_negative <<  "  " << p_positive << endl;
 
-	    if(probability[i] > 0.5){
-		polarity[i] = true;
-	    } else{
-		    polarity[i] = false;
-	    }
+        if ( polarity_init_method == SP )
+        {
+            polarity[i] = (probability[i] > 0.5 ? true : false);
+        }
+
+        if ( activity_init_method == SP )
+        {
+            activity[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
+        }
     }
 
 }
 
+void Solver::jeroslow_wang_init()
+{
+    vec<double> cnt;
+    int n = nVars();
+    cnt.growTo(2 * n);
+    for( int v=0; v<2*n; v++ )
+        cnt[v] = 0.0;
+
+    for( int i=0; i<nClauses(); i++ )
+    {
+        Clause& c = ca[clauses[i]];
+        if ( c.size() >= 50 ) continue;
+        double sc = pow(2, -c.size());
+        for( int j=0; j<c.size(); j++ )
+        {
+            Lit q = c[j];
+            if ( sign(q) )
+                cnt[var(q) + n] += sc;
+            else
+                cnt[var(q)] += sc;
+        }
+    }
+
+    if ( polarity_init_method == JW )
+    {
+        for( int v=0; v<n; v++ )
+            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
+    }
+
+    if ( activity_init_method == JW )
+    {
+        int m = nClauses();
+        if ( m == 0 ) m = 1;
+        for( int v=0; v<n; v++ )
+        {
+            activity[v] = (cnt[v] + cnt[v+n]) / m;
+        }
+    }
+}
 
 // NOTE: assumptions passed in member-variable 'assumptions'.
 lbool Solver::solve_()
@@ -1207,14 +1298,23 @@ lbool Solver::solve_()
     conflict.clear();
     if (!ok) return l_False;
 
-    if ( bayesian_polarity || bayesian_activity )
-    {
-        double before_bayesian_time = cpuTime();
+    double before_init_time = cpuTime();
+    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
         init_bayesian();
         bayesian();
-        double after_bayesian_time = cpuTime();
-        printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
     }
+    if ( polarity_init_method == SP || activity_init_method == SP )
+        survey_propogation();
+    if ( polarity_init_method == JW || activity_init_method == JW )
+        jeroslow_wang_init();
+    if ( polarity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) polarity[v] = drand(random_seed) < 0.5 ? true : false;
+    }
+    if ( activity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) activity[v] = drand(random_seed) * 0.00001;
+    }
+    double after_init_time = cpuTime();
+    printf("|  Polarity and/or Activity initialization time:  %12.2f s                                     |\n", after_init_time - before_init_time);
 
     solves++;
 
