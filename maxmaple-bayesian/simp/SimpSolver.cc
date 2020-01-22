@@ -95,6 +95,12 @@ lbool SimpSolver::solve_(bool do_simp, bool turn_off_simp)
     vec<Var> extra_frozen;
     lbool    result = l_True;
 
+    double before_bayesian_time = cpuTime();
+	init_bayesian();
+    bayesian();
+    double after_bayesian_time = cpuTime();
+    printf("c |  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
+
     do_simp &= use_simplification;
 
     if (do_simp){

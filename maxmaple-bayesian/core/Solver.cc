@@ -1139,11 +1139,11 @@ lbool Solver::solve_()
     conflict.clear();
     if (!ok) return l_False;
 
-    double before_bayesian_time = cpuTime();
+//    double before_bayesian_time = cpuTime();
 //	init_beta_dist();
 //    bayesian();
-    double after_bayesian_time = cpuTime();
-    printf("c |  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
+//    double after_bayesian_time = cpuTime();
+//    printf("c |  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
 
     solves++;
 
