@@ -931,7 +931,7 @@ lbool Solver::search(int nof_conflicts)
             action = trail.size();
 #endif
 
-            if ( polarity_init_method == BMM || activity_init_method == BMM )
+            if ( (polarity_init_method == BMM || activity_init_method == BMM) && update_epochs > 0 )
             {
                 if ( learnt_clause.size() <= 2 )
                 {

@@ -39,6 +39,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include "mtl/Alg.h"
 #include "utils/Options.h"
 #include "core/SolverTypes.h"
+#include <vector>
+#include <map>
 
 
 // Don't change the actual numbers.
@@ -235,7 +237,8 @@ protected:
                         learnts_local;
     double              cla_inc;          // Amount to bump next clause with.
     vec<double>         activity_CHB,     // A heuristic measurement of the activity of a variable.
-                        activity_VSIDS;
+                        activity_VSIDS,
+                        activity_distance;
     double              var_inc;          // Amount to bump next variable with.
     OccLists<Lit, vec<Watcher>, WatcherDeleted>
                         watches_bin,      // Watches for binary clauses only.
@@ -251,7 +254,8 @@ protected:
     int64_t             simpDB_props;     // Remaining number of propagations that must be made before next execution of 'simplify()'.
     vec<Lit>            assumptions;      // Current set of assumptions provided to solve by the user.
     Heap<VarOrderLt>    order_heap_CHB,   // A priority queue of variables ordered with respect to the variable activity.
-                        order_heap_VSIDS;
+                        order_heap_VSIDS,
+                        order_heap_distance;
     double              progress_estimate;// Set by 'search()'.
     bool                remove_satisfied; // Indicates whether possibly inefficient linear scan for satisfied clauses should be performed in 'simplify'.
 
@@ -438,6 +442,14 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     inline bool implExistsByBin(Lit p, bool use_bin_learnts) const;
     inline bool isRoot(Lit p, bool use_bin_learnts) const;
 
+    bool DISTANCE;
+    vec<double> var_iLevel_tmp;
+    vec<Lit> involved_lits;
+    vec<int> pathCs;
+    double var_iLevel_inc;
+    bool collectFirstUIP(CRef confl);
+    double    my_var_decay;
+
     void bayesian();
     template<typename T>
     void bayesian_update(T& c);
@@ -446,19 +458,42 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;
 
-    bool bayesian_polarity;     // config variable: Turn on/off BMM for polarity initialization
-    bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
-    int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
-    int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
+    //InitMethod polarity_init_method;
+    //InitMethod activity_init_method;
+    int polarity_init_method;
+    int activity_init_method;
 
-    bool rnd_init_polarity;
-    bool freq_cnt_pol;
-    bool freq_cnt_act;
-    void frequency_count_init();
+    
+    int init_epochs;   // config variable: Number of epochs for initialization
+    int update_epochs; // config variable: Number of epochs on each conflit clause update
 
-    bool jw_pol;
-    bool jw_act;
+    std::map<int, std::vector<int>> literalLookup;
+    std::vector<std::map<int, double>> survey_p;
+    void survey_propogation();
+    void survey_update(Clause &a, int clause_id);
+
     void jeroslow_wang_init();
+//    void bayesian();
+//    template<typename T>
+//    void bayesian_update(T& c);
+//    void init_bayesian();
+//
+//    vec<BetaDist> parameters;
+//    vec<BetaDist> updatedParams;
+//
+//    bool bayesian_polarity;     // config variable: Turn on/off BMM for polarity initialization
+//    bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
+//    int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
+//    int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
+//
+//    bool rnd_init_polarity;
+//    bool freq_cnt_pol;
+//    bool freq_cnt_act;
+//    void frequency_count_init();
+//
+//    bool jw_pol;
+//    bool jw_act;
+//    void jeroslow_wang_init();
 };
 
 

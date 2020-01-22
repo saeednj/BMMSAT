@@ -27,6 +27,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #include "utils/System.h"
 using namespace Minisat;
+using namespace std;
 
 #ifdef BIN_DRUP
 int Solver::buf_len = 0;
@@ -54,16 +55,20 @@ static IntOption     opt_restart_first     (_cat, "rfirst",      "The base resta
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
 
-static BoolOption    opt_bayesian_polarity      (_cat, "init-polarity", "Use Bayesian moment matching for polarity initialization", true);
-static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bayesian moment matching for activity initialization", false);
-static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 50, IntRange(0, 1000));
-static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 5, IntRange(0, 1000));
+//static BoolOption    opt_bayesian_polarity      (_cat, "init-polarity", "Use Bayesian moment matching for polarity initialization", true);
+//static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bayesian moment matching for activity initialization", false);
+//static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 50, IntRange(0, 1000));
+//static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 5, IntRange(0, 1000));
 
-static BoolOption    opt_rnd_init_pol      (_cat, "rnd-polarity",    "Randomize the initial polarity", false);
-static BoolOption    opt_freq_cnt_pol      (_cat, "freq-cnt-pol",    "Frequency based polarity initialization", false);
-static BoolOption    opt_freq_cnt_act      (_cat, "freq-cnt-act",    "Frequency based activity initialization", false);
-static BoolOption    opt_jw_pol      (_cat, "jw-pol",    "Jeroslow-Wang based polarity initialization", false);
-static BoolOption    opt_jw_act      (_cat, "jw-act",    "Jeroslow-Wang based activity initialization", false);
+//static BoolOption    opt_rnd_init_pol      (_cat, "rnd-polarity",    "Randomize the initial polarity", false);
+//static BoolOption    opt_freq_cnt_pol      (_cat, "freq-cnt-pol",    "Frequency based polarity initialization", false);
+//static BoolOption    opt_freq_cnt_act      (_cat, "freq-cnt-act",    "Frequency based activity initialization", false);
+//static BoolOption    opt_jw_pol      (_cat, "jw-pol",    "Jeroslow-Wang based polarity initialization", false);
+//static BoolOption    opt_jw_act      (_cat, "jw-act",    "Jeroslow-Wang based activity initialization", false);
+static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
+static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
+static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
+static IntOption     opt_update_epochs            (_cat, "update-epochs", "Number of Epochs for updating polarity/activity weights using a conflict clause", 1, IntRange(0, 1000));
 
 
 //=================================================================================================
@@ -134,17 +139,26 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 
-    // Bayesian configs
-  , bayesian_polarity(opt_bayesian_polarity)
-  , bayesian_activity(opt_bayesian_activity)
-  , bayesian_init_epochs(opt_bayesian_init_epochs)
-  , bayesian_update_epochs(opt_bayesian_update_epochs)
+//    // Bayesian configs
+//  , bayesian_polarity(opt_bayesian_polarity)
+//  , bayesian_activity(opt_bayesian_activity)
+//  , bayesian_init_epochs(opt_bayesian_init_epochs)
+//  , bayesian_update_epochs(opt_bayesian_update_epochs)
+//
+//  , rnd_init_polarity(opt_rnd_init_pol)
+//  , freq_cnt_pol (opt_freq_cnt_pol)
+//  , freq_cnt_act (opt_freq_cnt_act)
+//  , jw_pol (opt_jw_pol)
+//  , jw_act (opt_jw_act)
+  , polarity_init_method(opt_polarity_init_method)
+  , activity_init_method(opt_activity_init_method)
+  , init_epochs(opt_init_epochs)
+  , update_epochs(opt_update_epochs)
 
-  , rnd_init_polarity(opt_rnd_init_pol)
-  , freq_cnt_pol (opt_freq_cnt_pol)
-  , freq_cnt_act (opt_freq_cnt_act)
-  , jw_pol (opt_jw_pol)
-  , jw_act (opt_jw_act)
+  , DISTANCE(opt_activity_init_method == DIST)
+  , order_heap_distance(VarOrderLt(activity_distance))
+  , var_iLevel_inc     (1)
+  , my_var_decay       (0.6)
 {}
 
 
@@ -170,15 +184,21 @@ Var Solver::newVar(bool sign, bool dvar)
     assigns  .push(l_Undef);
     vardata  .push(mkVarData(CRef_Undef, 0));
     activity_CHB  .push(0);
-    activity_VSIDS.push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
+    activity_VSIDS  .push(0);
+    //activity_VSIDS.push(rnd_init_act ? drand(random_seed) * 0.00001 : 0);
 
     picked.push(0);
     conflicted.push(0);
     almost_conflicted.push(0);
 
+    var_iLevel_tmp.push(0);
+    pathCs.push(0);
+    activity_distance.push(0);
+
     seen     .push(0);
     seen2    .push(0);
-    polarity .push(rnd_init_polarity ? (drand(random_seed) < 0.5 ? true : false) : sign);
+    //polarity .push(rnd_init_polarity ? (drand(random_seed) < 0.5 ? true : false) : sign);
+    polarity .push(sign);
     decision .push();
     trail    .capacity(v+1);
     setDecisionVar(v, dvar);
@@ -348,7 +368,7 @@ void Solver::cancelUntil(int level) {
 Lit Solver::pickBranchLit()
 {
     Var next = var_Undef;
-    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
+    Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : (VSIDS ? order_heap_VSIDS : order_heap_CHB);
 
     // Random decision:
     /*if (drand(random_seed) < random_var_freq && !order_heap.empty()){
@@ -826,6 +846,7 @@ void Solver::rebuildOrderHeap()
 
     order_heap_CHB  .build(vs);
     order_heap_VSIDS.build(vs);
+    order_heap_distance.build(vs);
 }
 
 
@@ -866,6 +887,95 @@ bool Solver::simplify(bool do_stamping)
     return ok;
 }
 
+// pathCs[k] is the number of variables assigned at level k,
+// it is initialized to 0 at the begining and reset to 0 after the function execution
+bool Solver::collectFirstUIP(CRef confl){
+    involved_lits.clear();
+    int max_level=1;
+    Clause& c=ca[confl]; int minLevel=decisionLevel();
+    for(int i=0; i<c.size(); i++) {
+        Var v=var(c[i]);
+        //        assert(!seen[v]);
+        if (level(v)>0) {
+            seen[v]=1;
+            var_iLevel_tmp[v]=1;
+            pathCs[level(v)]++;
+            if (minLevel>level(v)) {
+                minLevel=level(v);
+                assert(minLevel>0);
+            }
+            //    varBumpActivity(v);
+        }
+    }
+
+    int limit=trail_lim[minLevel-1];
+    for(int i=trail.size()-1; i>=limit; i--) {
+        Lit p=trail[i]; Var v=var(p);
+        if (seen[v]) {
+            int currentDecLevel=level(v);
+            //      if (currentDecLevel==decisionLevel())
+            //      	varBumpActivity(v);
+            seen[v]=0;
+            if (--pathCs[currentDecLevel]!=0) {
+                Clause& rc=ca[reason(v)];
+                int reasonVarLevel=var_iLevel_tmp[v]+1;
+                if(reasonVarLevel>max_level) max_level=reasonVarLevel;
+                if (rc.size()==2 && value(rc[0])==l_False) {
+                    // Special case for binary clauses
+                    // The first one has to be SAT
+                    assert(value(rc[1]) != l_False);
+                    Lit tmp = rc[0];
+                    rc[0] =  rc[1], rc[1] = tmp;
+                }
+                for (int j = 1; j < rc.size(); j++){
+                    Lit q = rc[j]; Var v1=var(q);
+                    if (level(v1) > 0) {
+                        if (minLevel>level(v1)) {
+                            minLevel=level(v1); limit=trail_lim[minLevel-1]; 	assert(minLevel>0);
+                        }
+                        if (seen[v1]) {
+                            if (var_iLevel_tmp[v1]<reasonVarLevel)
+                                var_iLevel_tmp[v1]=reasonVarLevel;
+                        }
+                        else {
+                            var_iLevel_tmp[v1]=reasonVarLevel;
+                            //   varBumpActivity(v1);
+                            seen[v1] = 1;
+                            pathCs[level(v1)]++;
+                        }
+                    }
+                }
+            }
+            involved_lits.push(p);
+        }
+    }
+    double inc=var_iLevel_inc;
+    vec<int> level_incs; level_incs.clear();
+    for(int i=0;i<max_level;i++){
+        level_incs.push(inc);
+        inc = inc/my_var_decay;
+    }
+
+    for(int i=0;i<involved_lits.size();i++){
+        Var v =var(involved_lits[i]);
+        //        double old_act=activity_distance[v];
+        //        activity_distance[v] +=var_iLevel_inc * var_iLevel_tmp[v];
+        activity_distance[v]+=var_iLevel_tmp[v]*level_incs[var_iLevel_tmp[v]-1];
+
+        if(activity_distance[v]>1e100){
+            for(int vv=0;vv<nVars();vv++)
+                activity_distance[vv] *= 1e-100;
+            var_iLevel_inc*=1e-100;
+            for(int j=0; j<max_level; j++) level_incs[j]*=1e-100;
+        }
+        if (order_heap_distance.inHeap(v))
+            order_heap_distance.decrease(v);
+
+        //        var_iLevel_inc *= (1 / my_var_decay);
+    }
+    var_iLevel_inc=level_incs[level_incs.size()-1];
+    return true;
+}
 
 // TODO: very dirty and hackish.
 void Solver::removeClauseHack(CRef cr, Lit watched0, Lit watched1)
@@ -1010,19 +1120,26 @@ lbool Solver::search(int& nof_conflicts)
             if (decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
+            if(conflicts>50000) DISTANCE=0;
+            else DISTANCE=1;
+            if(DISTANCE)
+                collectFirstUIP(confl);
             analyze(confl, learnt_clause, backtrack_level, lbd);
             cancelUntil(backtrack_level);
 
-            if ( bayesian_polarity && bayesian_update_epochs > 0 )
+            if ( (polarity_init_method == BMM || activity_init_method == BMM) && update_epochs > 0 )
             {
                 if ( learnt_clause.size() <= 2 )
                 {
-                    for( int i=0; i<bayesian_update_epochs; i++ )
+                    for( int i=0; i<update_epochs; i++ )
                         bayesian_update(learnt_clause);
 
                     for( int i=0; i<learnt_clause.size(); i++ ) {
                         Var v = var(learnt_clause[i]);
-                        polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                        if ( polarity_init_method == BMM )
+                            polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+                        if ( activity_init_method == BMM )
+                            activity_VSIDS[v] = activity_CHB[v] = BayesianWeight(v);
                     }
                 }
             }
@@ -1234,12 +1351,11 @@ void Solver::bayesian_update(T& c)
 
 void Solver::bayesian()
 {
-    //printf("DBG: nvars: %d, nclauses: %d\n", nVars(), nClauses());
     int n = nVars();
 
     updatedParams.growTo(n);
 
-    for( int k=0; k<bayesian_init_epochs; k++ )
+    for( int k=0; k<init_epochs; k++ )
     {
         for( int i=0; i<nClauses(); i++ )
         {
@@ -1266,7 +1382,7 @@ void Solver::bayesian()
         }
     }
 
-    if ( bayesian_polarity )
+    if ( polarity_init_method == BMM )
     {
         for( int v=0; v<n; v++ )
         {
@@ -1274,7 +1390,7 @@ void Solver::bayesian()
         }
     }
 
-    if ( bayesian_activity )
+    if ( activity_init_method == BMM )
     {
         for( int v=0; v<n; v++ )
         {
@@ -1328,38 +1444,175 @@ void Solver::init_bayesian()
 //    }
 }
 
-void Solver::frequency_count_init()
-{
-    vec<int> cnt;
-    int n = nVars();
-    cnt.growTo(2 * n);
 
-    for( int v=0; v<2*n; v++ )
-        cnt[v] = 0;
+void Solver::survey_update(Clause &a, int clause_id) {
+	vector<double> p(a.size(), 0.0);
+	double product = 1.0;
+	for(unsigned int i = 0; i < a.size(); i++){
+		double pu = 1.0;
+		double ps = 1.0;
+		Lit l = a[i];
+		int v = var(l);
+		if(sign(l)){
+			v = -(v+1); 
+		} else{
+			v = v+1;
+		}
+		if(this->literalLookup.count(v) != 0){
+			vector<int> vs = literalLookup[v];
+			for(unsigned int j = 0; j < vs.size(); j++){
+				if(vs[j] != clause_id){
+					ps *= (1 - survey_p[vs[j]][abs(v)]);
+				}
+			}
+		}
 
-    for( int i=0; i<nClauses(); i++ )
-    {
-        Clause& c = ca[clauses[i]];
-        for( int j=0; j<c.size(); j++ )
+		if(literalLookup.count(-v) != 0){
+			vector<int> vu = literalLookup[-v];
+			for(unsigned int j = 0; j < vu.size(); j++){
+				pu *= (1 - survey_p[vu[j]][abs(v)]);
+			}
+		}
+
+		double r1 = (1 - pu) * ps;
+		double r2 = (1 - ps) * pu;
+		double r3 = ps * pu;
+		p[i] = r1 / (r1 + r2 + r3);
+		product *= p[i];
+	}
+
+	for(unsigned int i = 0; i < a.size(); i++){
+		int v = 1 + var(a[i]);
+		survey_p[clause_id][v] = product / p[i];
+		//cout << clause_id << " " << v << " " << survey_p[clause_id][abs(v)] << endl;
+	}
+}
+
+
+void Solver::survey_propogation(){
+
+    int epochs = init_epochs;
+    int num_literal = nVars();
+    int num_clauses = nClauses();
+
+    vector<double> probability(num_literal, 0.0);
+
+    //build LiteralLookup and survey_p
+    //
+    for(int i = 0; i < num_clauses; i++){
+	    Clause &c = ca[clauses[i]];
+	    map<int, double> row;
+	    for(int j = 0; j < c.size(); j++){
+		    Lit l = c[j];
+		    int v = var(l);
+		    if(sign(l)){
+			    //cout << v << endl;
+			v = -(v+1);
+		    } else{
+			    v = v+1;
+		    }
+		    //cout << v << endl;
+		    literalLookup[v].push_back(i);
+		    row[abs(v)] = (rand() * 1.0) / RAND_MAX;
+	    }
+	    survey_p.push_back(row);
+    }
+
+    /*auto it = literalLookup.begin();
+
+    while(it != literalLookup.end()){
+	    cout << it->first << " ";
+	    printVectorInt(it->second);
+	    it++;
+    } */
+
+    /*for(auto map : survey_p){
+	    auto it = map.begin();
+	   
+    	while(it != map.end()){
+	    cout << it->first << ": ";
+	    //printVectorInt(it->second);
+	    cout << it->second << "  ";
+	    it++;
+    	} 
+
+	cout << endl;
+    } */
+    
+    for(int k = 0; k < epochs; k++){
+    	for(int i = 0; i < num_clauses; i++){
+		Clause &a = ca[clauses[i]];
+		survey_update(a, i);
+    	}
+    }
+
+    for(int i = 0; i < num_literal; i++){
+        double p_positive = 1.0;
+        double p_negative = 1.0;
+        if(literalLookup.count(i+1) != 0){
+            vector<int> clause_plus = literalLookup[i+1];
+            for(unsigned int j = 0; j < clause_plus.size(); j++){
+                //cout << survey_p[clause_plus[j]][i+1] << endl;
+                p_positive *= (1 - survey_p[clause_plus[j]][i+1]);
+            }
+        }
+
+
+        if(literalLookup.count(-(i+1)) != 0){
+            vector<int> clause_negative = literalLookup[-(i+1)];
+            for(unsigned int j = 0; j < clause_negative.size(); j++){
+                p_negative *= (1 - survey_p[clause_negative[j]][i+1]);
+            }
+        }
+        probability[i] = p_negative / (p_positive + p_negative);
+        //cout << probability[i] << endl;
+        //cout << p_negative <<  "  " << p_positive << endl;
+
+        if ( polarity_init_method == SP )
         {
-            Lit q = c[j];
-            if ( sign(q) )
-                cnt[var(q) + n]++;
-            else
-                cnt[var(q)]++;
+            polarity[i] = (probability[i] > 0.5 ? true : false);
+        }
+
+        if ( activity_init_method == SP )
+        {
+            activity_VSIDS[i] = activity_CHB[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
         }
     }
 
-    if ( freq_cnt_pol )
-    {
-        for( int v=0; v<n; v++ )
-            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
-    }
-
-    if ( freq_cnt_act )
-    {
-    }
 }
+
+//void Solver::frequency_count_init()
+//{
+//    vec<int> cnt;
+//    int n = nVars();
+//    cnt.growTo(2 * n);
+//
+//    for( int v=0; v<2*n; v++ )
+//        cnt[v] = 0;
+//
+//    for( int i=0; i<nClauses(); i++ )
+//    {
+//        Clause& c = ca[clauses[i]];
+//        for( int j=0; j<c.size(); j++ )
+//        {
+//            Lit q = c[j];
+//            if ( sign(q) )
+//                cnt[var(q) + n]++;
+//            else
+//                cnt[var(q)]++;
+//        }
+//    }
+//
+//    if ( freq_cnt_pol )
+//    {
+//        for( int v=0; v<n; v++ )
+//            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
+//    }
+//
+//    if ( freq_cnt_act )
+//    {
+//    }
+//}
 
 void Solver::jeroslow_wang_init()
 {
@@ -1372,6 +1625,7 @@ void Solver::jeroslow_wang_init()
     for( int i=0; i<nClauses(); i++ )
     {
         Clause& c = ca[clauses[i]];
+        if ( c.size() >= 50 ) continue;
         double sc = pow(2, -c.size());
         for( int j=0; j<c.size(); j++ )
         {
@@ -1383,13 +1637,13 @@ void Solver::jeroslow_wang_init()
         }
     }
 
-    if ( jw_pol )
+    if ( polarity_init_method == JW )
     {
         for( int v=0; v<n; v++ )
             polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
     }
 
-    if ( jw_act )
+    if ( activity_init_method == JW )
     {
         int m = nClauses();
         if ( m == 0 ) m = 1;
@@ -1407,25 +1661,42 @@ lbool Solver::solve_()
     conflict.clear();
     if (!ok) return l_False;
 
-    if ( freq_cnt_pol || freq_cnt_act )
-    {
-        frequency_count_init();
-    }
-
-    if ( jw_pol || jw_act )
-    {
-        jeroslow_wang_init();
-    }
-
-    if ( bayesian_polarity || bayesian_activity )
-    {
-        double before_bayesian_time = cpuTime();
+    double before_init_time = cpuTime();
+    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
         init_bayesian();
         bayesian();
-        double after_bayesian_time = cpuTime();
-        printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
     }
-
+    if ( polarity_init_method == SP || activity_init_method == SP )
+        survey_propogation();
+    if ( polarity_init_method == JW || activity_init_method == JW )
+        jeroslow_wang_init();
+    if ( polarity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) polarity[v] = drand(random_seed) < 0.5 ? true : false;
+    }
+    if ( activity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) activity_VSIDS[v] = activity_CHB[v] = drand(random_seed) * 0.00001;
+    }
+    double after_init_time = cpuTime();
+    printf("|  Initialization time:  %12.2f s                                       |\n", after_init_time - before_init_time);
+//    if ( freq_cnt_pol || freq_cnt_act )
+//    {
+//        frequency_count_init();
+//    }
+//
+//    if ( jw_pol || jw_act )
+//    {
+//        jeroslow_wang_init();
+//    }
+//
+//    if ( bayesian_polarity || bayesian_activity )
+//    {
+//        double before_bayesian_time = cpuTime();
+//        init_bayesian();
+//        bayesian();
+//        double after_bayesian_time = cpuTime();
+//        printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
+//    }
+//
     solves++;
 
     max_learnts               = nClauses() * learntsize_factor;
