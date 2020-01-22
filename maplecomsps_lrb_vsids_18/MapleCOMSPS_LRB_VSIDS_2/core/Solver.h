@@ -442,13 +442,13 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     inline bool implExistsByBin(Lit p, bool use_bin_learnts) const;
     inline bool isRoot(Lit p, bool use_bin_learnts) const;
 
-    bool DISTANCE;
+    bool collectFirstUIP(CRef confl);
     vec<double> var_iLevel_tmp;
-    vec<Lit> involved_lits;
     vec<int> pathCs;
     double var_iLevel_inc;
-    bool collectFirstUIP(CRef confl);
+    vec<Lit> involved_lits;
     double    my_var_decay;
+    bool DISTANCE;
 
     void bayesian();
     template<typename T>
@@ -458,8 +458,6 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;
 
-    //InitMethod polarity_init_method;
-    //InitMethod activity_init_method;
     int polarity_init_method;
     int activity_init_method;
 
@@ -473,27 +471,6 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     void survey_update(Clause &a, int clause_id);
 
     void jeroslow_wang_init();
-//    void bayesian();
-//    template<typename T>
-//    void bayesian_update(T& c);
-//    void init_bayesian();
-//
-//    vec<BetaDist> parameters;
-//    vec<BetaDist> updatedParams;
-//
-//    bool bayesian_polarity;     // config variable: Turn on/off BMM for polarity initialization
-//    bool bayesian_activity;     // config variable: Turn on/off BMM for activity initialization
-//    int bayesian_init_epochs;   // config variable: Number of epochs for initial BMM
-//    int bayesian_update_epochs; // config variable: Number of epochs on each conflit clause update
-//
-//    bool rnd_init_polarity;
-//    bool freq_cnt_pol;
-//    bool freq_cnt_act;
-//    void frequency_count_init();
-//
-//    bool jw_pol;
-//    bool jw_act;
-//    void jeroslow_wang_init();
 };
 
 
@@ -504,7 +481,8 @@ inline CRef Solver::reason(Var x) const { return vardata[x].reason; }
 inline int  Solver::level (Var x) const { return vardata[x].level; }
 
 inline void Solver::insertVarOrder(Var x) {
-    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
+    //    Heap<VarOrderLt>& order_heap = VSIDS ? order_heap_VSIDS : order_heap_CHB;
+    Heap<VarOrderLt>& order_heap = DISTANCE ? order_heap_distance : ((!VSIDS)? order_heap_CHB:order_heap_VSIDS);
     if (!order_heap.inHeap(x) && decision[x]) order_heap.insert(x); }
 
 inline void Solver::varDecayActivity() {
@@ -566,7 +544,9 @@ inline void     Solver::setDecisionVar(Var v, bool b)
     decision[v] = b;
     if (b && !order_heap_CHB.inHeap(v)){
         order_heap_CHB.insert(v);
-        order_heap_VSIDS.insert(v); }
+        order_heap_VSIDS.insert(v);
+        order_heap_distance.insert(v);
+    }
 }
 inline void     Solver::setConfBudget(int64_t x){ conflict_budget    = conflicts    + x; }
 inline void     Solver::setPropBudget(int64_t x){ propagation_budget = propagations + x; }

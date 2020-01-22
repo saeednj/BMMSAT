@@ -919,8 +919,7 @@ lbool Solver::search(int nof_conflicts)
             if (decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
-            if(conflicts>50000) DISTANCE=0;
-            else DISTANCE=1;
+            if(conflicts>50000) DISTANCE = false;
             if(DISTANCE)
                 collectFirstUIP(confl);
             analyze(confl, learnt_clause, backtrack_level);

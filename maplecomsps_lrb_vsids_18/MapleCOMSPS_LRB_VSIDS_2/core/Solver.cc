@@ -55,16 +55,6 @@ static IntOption     opt_restart_first     (_cat, "rfirst",      "The base resta
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
 
-//static BoolOption    opt_bayesian_polarity      (_cat, "init-polarity", "Use Bayesian moment matching for polarity initialization", true);
-//static BoolOption    opt_bayesian_activity      (_cat, "init-activity", "Use Bayesian moment matching for activity initialization", false);
-//static IntOption     opt_bayesian_init_epochs   (_cat, "init-epochs", "Initial number of Epochs for learning Bayesian weights", 50, IntRange(0, 1000));
-//static IntOption     opt_bayesian_update_epochs (_cat, "update-epochs", "Number of Epochs for updating Bayesian weights using a conflict clause", 5, IntRange(0, 1000));
-
-//static BoolOption    opt_rnd_init_pol      (_cat, "rnd-polarity",    "Randomize the initial polarity", false);
-//static BoolOption    opt_freq_cnt_pol      (_cat, "freq-cnt-pol",    "Frequency based polarity initialization", false);
-//static BoolOption    opt_freq_cnt_act      (_cat, "freq-cnt-act",    "Frequency based activity initialization", false);
-//static BoolOption    opt_jw_pol      (_cat, "jw-pol",    "Jeroslow-Wang based polarity initialization", false);
-//static BoolOption    opt_jw_act      (_cat, "jw-act",    "Jeroslow-Wang based activity initialization", false);
 static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
 static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
 static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
@@ -139,26 +129,15 @@ Solver::Solver() :
   , propagation_budget (-1)
   , asynch_interrupt   (false)
 
-//    // Bayesian configs
-//  , bayesian_polarity(opt_bayesian_polarity)
-//  , bayesian_activity(opt_bayesian_activity)
-//  , bayesian_init_epochs(opt_bayesian_init_epochs)
-//  , bayesian_update_epochs(opt_bayesian_update_epochs)
-//
-//  , rnd_init_polarity(opt_rnd_init_pol)
-//  , freq_cnt_pol (opt_freq_cnt_pol)
-//  , freq_cnt_act (opt_freq_cnt_act)
-//  , jw_pol (opt_jw_pol)
-//  , jw_act (opt_jw_act)
   , polarity_init_method(opt_polarity_init_method)
   , activity_init_method(opt_activity_init_method)
   , init_epochs(opt_init_epochs)
   , update_epochs(opt_update_epochs)
 
-  , DISTANCE(opt_activity_init_method == DIST)
-  , order_heap_distance(VarOrderLt(activity_distance))
-  , var_iLevel_inc     (1)
   , my_var_decay       (0.6)
+  , DISTANCE(opt_activity_init_method == DIST)
+  , var_iLevel_inc     (1)
+  , order_heap_distance(VarOrderLt(activity_distance))
 {}
 
 
@@ -1120,8 +1099,7 @@ lbool Solver::search(int& nof_conflicts)
             if (decisionLevel() == 0) return l_False;
 
             learnt_clause.clear();
-            if(conflicts>50000) DISTANCE=0;
-            else DISTANCE=1;
+            if(conflicts>50000) DISTANCE = false;
             if(DISTANCE)
                 collectFirstUIP(confl);
             analyze(confl, learnt_clause, backtrack_level, lbd);
@@ -1581,38 +1559,6 @@ void Solver::survey_propogation(){
 
 }
 
-//void Solver::frequency_count_init()
-//{
-//    vec<int> cnt;
-//    int n = nVars();
-//    cnt.growTo(2 * n);
-//
-//    for( int v=0; v<2*n; v++ )
-//        cnt[v] = 0;
-//
-//    for( int i=0; i<nClauses(); i++ )
-//    {
-//        Clause& c = ca[clauses[i]];
-//        for( int j=0; j<c.size(); j++ )
-//        {
-//            Lit q = c[j];
-//            if ( sign(q) )
-//                cnt[var(q) + n]++;
-//            else
-//                cnt[var(q)]++;
-//        }
-//    }
-//
-//    if ( freq_cnt_pol )
-//    {
-//        for( int v=0; v<n; v++ )
-//            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
-//    }
-//
-//    if ( freq_cnt_act )
-//    {
-//    }
-//}
 
 void Solver::jeroslow_wang_init()
 {
@@ -1678,25 +1624,7 @@ lbool Solver::solve_()
     }
     double after_init_time = cpuTime();
     printf("|  Initialization time:  %12.2f s                                       |\n", after_init_time - before_init_time);
-//    if ( freq_cnt_pol || freq_cnt_act )
-//    {
-//        frequency_count_init();
-//    }
-//
-//    if ( jw_pol || jw_act )
-//    {
-//        jeroslow_wang_init();
-//    }
-//
-//    if ( bayesian_polarity || bayesian_activity )
-//    {
-//        double before_bayesian_time = cpuTime();
-//        init_bayesian();
-//        bayesian();
-//        double after_bayesian_time = cpuTime();
-//        printf("|  Bayesian learning time:  %12.2f s                                     |\n", after_bayesian_time - before_bayesian_time);
-//    }
-//
+
     solves++;
 
     max_learnts               = nClauses() * learntsize_factor;
