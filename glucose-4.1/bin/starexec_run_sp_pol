@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./glucose -pol-init=5 $1

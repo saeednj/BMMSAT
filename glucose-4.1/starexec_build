@@ -1,0 +1,11 @@
+#!/bin/sh
+
+if [ "$1" = "clean" ]; then
+    cd src/simp
+    make clean
+else
+    cd src/simp
+    make rs
+    cp glucose_static ../../bin/glucose
+fi
+

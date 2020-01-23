@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./glucose -pol-init=3 -act-init=3 $1

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./glucose -act-init=2 $1
