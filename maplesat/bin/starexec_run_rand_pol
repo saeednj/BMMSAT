@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./maplesat -pol-init=3 $1

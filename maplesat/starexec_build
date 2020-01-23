@@ -1,0 +1,11 @@
+#!/bin/sh
+
+if [ "$1" = "clean" ]; then
+    cd src/
+    make clean
+else
+    cd src/
+    make
+    cp simp/maplesat_static ../bin/maplesat
+fi
+

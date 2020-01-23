@@ -347,8 +347,6 @@ protected:
     vec<BetaDist> parameters;
     vec<BetaDist> updatedParams;
 
-    //InitMethod polarity_init_method;
-    //InitMethod activity_init_method;
     int polarity_init_method;
     int activity_init_method;
 

@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./maplesat -act-init=3 $1
