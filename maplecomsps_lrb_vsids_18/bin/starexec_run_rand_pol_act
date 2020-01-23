@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./MapleCOMSPS_LRB_VSIDS_2 -pol-init=3 -act-init=3 $1

@@ -1,0 +1,3 @@
+#!/bin/sh
+
+./MapleCOMSPS_LRB_VSIDS_2 -act-init=5 $1

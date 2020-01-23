@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./maplelcmdistchronobt -pol-init=3 -act-init=3 $1
