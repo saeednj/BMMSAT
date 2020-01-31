@@ -55,8 +55,8 @@ static IntOption     opt_restart_first     (_cat, "rfirst",      "The base resta
 static DoubleOption  opt_restart_inc       (_cat, "rinc",        "Restart interval increase factor", 2, DoubleRange(1, false, HUGE_VAL, false));
 static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction of wasted memory allowed before a garbage collection is triggered",  0.20, DoubleRange(0, false, HUGE_VAL, false));
 
-static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
-static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation)", 0, IntRange(0, 5));
+static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM_DIST)", 0, IntRange(0, 6));
+static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM_DIST)", 0, IntRange(0, 6));
 static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
 static IntOption     opt_update_epochs            (_cat, "update-epochs", "Number of Epochs for updating polarity/activity weights using a conflict clause", 1, IntRange(0, 1000));
 
@@ -1376,6 +1376,16 @@ void Solver::bayesian()
             activity_VSIDS[v] = BayesianWeight(v);
         }
     }
+
+    if ( activity_init_method == BMM_DIST )
+    {
+        for( int v=0; v<n; v++ )
+        {
+            activity_CHB[v] = BayesianWeight(v);
+            activity_VSIDS[v] = BayesianWeight(v);
+            activity_distance[v] = BayesianWeight(v);
+        }
+    }
 }
 
 void Solver::init_bayesian()
@@ -1608,7 +1618,7 @@ lbool Solver::solve_()
     if (!ok) return l_False;
 
     double before_init_time = cpuTime();
-    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
+    if ( polarity_init_method == BMM || activity_init_method == BMM || activity_init_method == BMM_DIST ) {
         init_bayesian();
         bayesian();
     }
