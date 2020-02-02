@@ -4,9 +4,12 @@
 #include <math.h>
 #include <vector>
 #include <sstream>
+#include <algorithm>
 using namespace std;
 
 #define COUNT_UNSAT true
+//#define MULTI_SOLUTION true
+#define MAIN_BAYESIAN true
 
 typedef vector<int> Clause;
 struct BetaDist { double a, b; };
@@ -49,7 +52,7 @@ class Bayesian {
 
         void init(int type = 0);
         void update(Clause& c);
-        void main(int epochs);
+        int main(int epochs);
         void getAssignment(vector<int>& assign);
 
         vector<Clause>& clauses;
@@ -148,7 +151,7 @@ void Bayesian::update(Clause &c)
 
 
 
-void Bayesian::main(int epochs)
+int Bayesian::main(int epochs)
 {
 #ifdef COUNT_UNSAT
     vector<int> assign(nvars, 0);
@@ -192,11 +195,13 @@ void Bayesian::main(int epochs)
         for( int v=0; v<nvars; v++ )
             printf("%d ", (v+1) * assign[v]);
         printf("\n");
+        return 0;
     }
     else
     {
         printf("UNDET! converged after %d steps:\n", bestK);
         printf("at least %d clauses remained unsat (out of %lu)\n", best, clauses.size());
+        return 1;
     }
 #endif
 }
@@ -209,9 +214,11 @@ void Bayesian::getAssignment(vector<int>& assign)
     }
 }
 
-int main()
+int main(int argc, char **argv)
 {
-    int epochs = 100;
+    int epochs;
+    if ( argc > 1 ) epochs = atoi(argv[1]);
+    else epochs = 100;
 
     srand(time(NULL));
 
@@ -219,10 +226,44 @@ int main()
     vector<Clause> cs;
     parse(cs, nVars);
 
+#ifdef MULTI_SOLUTION
+    int solcnt = 10;
+    vector<vector<int>> sol(solcnt, vector<int>(nVars, 0));
+    int cnt = 0, res;
+    do {
+//        printf("Solution %d\n", cnt+1);
+        Bayesian b(nVars, cs);
+        b.init();
+        res = b.main(epochs);
+        b.getAssignment(sol[cnt]);
+        cnt++;
+        random_shuffle(cs.begin(), cs.end());
+    } while( res == 1 && cnt < solcnt );
+
+    if ( res == 0 )
+    {
+        return 0; // solution found
+    }
+
+    for( int j=0; j<sol[0].size(); j++ )
+        for( int i=1; i<solcnt; i++ )
+        {
+            sol[0][j] += sol[i][j];
+        }
+
+//    printf("====\n");
+    for( int i=0; i<sol[0].size(); i++ )
+        printf("%d %d\n", i, sol[0][i]);
+
+
+    return 1;
+#endif
+
+#ifdef MAIN_BAYESIAN
     Bayesian b(nVars, cs);
     b.init();
-    b.main(epochs);
-
+    int res = b.main(epochs);
     return 0;
+#endif
 }
 

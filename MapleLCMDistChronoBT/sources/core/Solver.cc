@@ -68,8 +68,10 @@ static DoubleOption  opt_garbage_frac      (_cat, "gc-frac",     "The fraction o
 static IntOption     opt_chrono            (_cat, "chrono",  "Controls if to perform chrono backtrack", 100, IntRange(-1, INT32_MAX));
 static IntOption     opt_conf_to_chrono    (_cat, "confl-to-chrono",  "Controls number of conflicts to perform chrono backtrack", 4000, IntRange(-1, INT32_MAX));
 
-static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM-DIST)", 0, IntRange(0, 6));
-static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM-DIST)", 0, IntRange(0, 6));
+//static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM-DIST)", 0, IntRange(0, 6));
+//static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=DIST, 5=Survey-Propagation, 6=BMM-DIST)", 0, IntRange(0, 6));
+static IntOption     opt_polarity_init_method     (_cat, "pol-init", "Polarity initialization method (0=Always-False, 1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=Survey-Propagation)", 0, IntRange(0, 4));
+static IntOption     opt_activity_init_method     (_cat, "act-init", "Activity initialization method (0=All-zero,     1=Bayesian-Moment-Matching, 2=Jeroslow-Wang, 3=Random, 4=Survey-Propagation)", 0, IntRange(0, 4));
 static IntOption     opt_init_epochs              (_cat, "init-epochs", "Initial number of Epochs for learning polarity/activity weights", 10, IntRange(0, 1000));
 static IntOption     opt_update_epochs            (_cat, "update-epochs", "Number of Epochs for updating polarity/activity weights using a conflict clause", 1, IntRange(0, 1000));
 
@@ -154,7 +156,7 @@ Solver::Solver() :
   , incSimplify(1000)
 
   , my_var_decay       (0.6)
-  , DISTANCE(opt_activity_init_method == DIST)
+  , DISTANCE(true)
   , var_iLevel_inc     (1)
   , order_heap_distance(VarOrderLt(activity_distance))
 
@@ -2183,18 +2185,10 @@ void Solver::bayesian()
         {
             activity_CHB[v] = BayesianWeight(v);
             activity_VSIDS[v] = BayesianWeight(v);
-        }
-    }
-
-    if ( activity_init_method == BMM_DIST )
-    {
-        for( int v=0; v<n; v++ )
-        {
-            activity_CHB[v] = BayesianWeight(v);
-            activity_VSIDS[v] = BayesianWeight(v);
             activity_distance[v] = BayesianWeight(v);
         }
     }
+
 }
 
 void Solver::init_bayesian()
@@ -2371,7 +2365,7 @@ void Solver::survey_propogation(){
 
         if ( activity_init_method == SP )
         {
-            activity_VSIDS[i] = activity_CHB[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
+            activity_distance[i] = activity_VSIDS[i] = activity_CHB[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
         }
     }
 
@@ -2413,7 +2407,7 @@ void Solver::jeroslow_wang_init()
         if ( m == 0 ) m = 1;
         for( int v=0; v<n; v++ )
         {
-            activity_CHB[v] = activity_VSIDS[v] = (cnt[v] + cnt[v+n]) / m;
+            activity_distance[v] = activity_CHB[v] = activity_VSIDS[v] = (cnt[v] + cnt[v+n]) / m;
         }
     }
 }
@@ -2429,7 +2423,7 @@ lbool Solver::solve_()
     if (!ok) return l_False;
 
     double before_init_time = cpuTime();
-    if ( polarity_init_method == BMM || activity_init_method == BMM || activity_init_method == BMM_DIST ) {
+    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
         init_bayesian();
         bayesian();
     }
@@ -2441,7 +2435,7 @@ lbool Solver::solve_()
         for( Var v=0; v<nVars(); v++ ) polarity[v] = drand(random_seed) < 0.5 ? true : false;
     }
     if ( activity_init_method == RANDOM ) {
-        for( Var v=0; v<nVars(); v++ ) activity_VSIDS[v] = activity_CHB[v] = drand(random_seed) * 0.00001;
+        for( Var v=0; v<nVars(); v++ ) activity_distance[v] = activity_VSIDS[v] = activity_CHB[v] = drand(random_seed) * 0.00001;
     }
     double after_init_time = cpuTime();
     printf("|  Initialization time:  %12.2f s                                       |\n", after_init_time - before_init_time);
