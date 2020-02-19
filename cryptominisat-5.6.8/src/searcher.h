@@ -38,6 +38,13 @@ THE SOFTWARE.
 #include "gtest/gtest_prod.h"
 #endif
 
+#define MAX(x, y) (((x) < (y)) ? (y) : (x))
+#define ABSDIFF(x, y) (((x) < (y)) ? ((y) - (x)) : ((x) - (y)))
+#define BayesianWeight_Max(v) (MAX(parameters[v].a, parameters[v].b) / (parameters[v].a + parameters[v].b))
+#define BayesianWeight_Min(v) (1.5 - BayesianWeight_Max(v))
+
+#define BayesianWeight(v) BayesianWeight_Max(v)
+
 
 namespace CMSat {
 
@@ -65,6 +72,18 @@ struct VariableVariance
     double avgTrailLevelVar = 0;
 };
 
+struct BetaDist {
+    double a, b;
+};
+
+enum InitMethod {
+    IM_DEFAULT = 0,
+    IM_BMM = 1,
+    IM_JW = 2,
+    IM_RANDOM = 3,
+    IM_SP = 4
+};
+
 class Searcher : public HyperEngine
 {
     public:
@@ -84,6 +103,30 @@ class Searcher : public HyperEngine
         bool must_abort(lbool status);
         uint64_t luby_loop_num = 0;
         MTRand mtrand; ///< random number generator
+
+        /// BEG: initialization methods
+        void bayesian();
+        template<typename T>
+            void bayesian_update(T& c);
+        void init_bayesian();
+
+        vector<BetaDist> parameters;
+        vector<BetaDist> updatedParams;
+
+        int polarity_init_method;
+        int activity_init_method;
+
+
+        int init_epochs;   // config variable: Number of epochs for initialization
+        int update_epochs; // config variable: Number of epochs on each conflit clause update
+
+        map<int, vector<int>> literalLookup;
+        vector<map<int, double>> survey_p;
+        void survey_propogation();
+        void survey_update(Clause &a, int clause_id);
+
+        void jeroslow_wang_init();
+        /// END: initialization methods
 
 
         vector<lbool>  model;

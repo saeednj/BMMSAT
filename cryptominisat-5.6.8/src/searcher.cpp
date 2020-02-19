@@ -2179,6 +2179,328 @@ bool Searcher::must_abort(const lbool status) {
     return false;
 }
 
+template <typename T>
+void Searcher::bayesian_update(T& c)
+{
+    double coeff_product = 1.0;
+    for( int j=0; j<c.size(); j++ )
+    {
+        Lit l = c[j];
+        if ( value(l) == l_True ) return; // this clause is already satisfied
+        if ( value(l) == l_False ) continue; // this literal is already falsified
+        int v = var(l);
+        int sgn = !sign(l);
+
+        updatedParams[v].a = parameters[v].a + (!sgn);
+        updatedParams[v].b = parameters[v].b + (sgn);
+
+        double coeff = (sgn ? parameters[v].b : parameters[v].a) / (parameters[v].a + parameters[v].b);
+        coeff_product *= coeff;
+    }
+    double normalization_constant = 1 - coeff_product;
+
+    for( int j=0; j<c.size(); j++ )
+    {
+        Lit l = c[j];
+        if ( value(l) == l_False ) continue; // this literal is already falsified
+        int v = var(l);
+
+        double sumP = parameters[v].a + parameters[v].b;
+        double sumUP = updatedParams[v].a + updatedParams[v].b;
+
+        double *p[2], *up[2];
+        p[0] = &parameters[v].a;
+        p[1] = &parameters[v].b;
+        up[0] = &updatedParams[v].a;
+        up[1] = &updatedParams[v].b;
+        for( int k=0; k<=1; k++ )
+        {
+            double moment1 = *p[k] / sumP - coeff_product * *up[k] / sumUP;
+            double moment2 = *p[k] * (*p[k] + 1) / ((sumP) * (sumP+1)) - coeff_product * *up[k] * (*up[k] + 1) / ((sumUP) * (sumUP+1));
+
+            moment1 /= normalization_constant;
+            moment2 /= normalization_constant;
+
+            *p[k] = moment1 * (moment1 - moment2) / (moment2 - moment1*moment1);
+        }
+    }
+}
+
+void Searcher::bayesian()
+{
+    int n = nVars();
+
+    updatedParams.resize(n);
+
+    for( int k=0; k<init_epochs; k++ )
+    {
+        for( int i=0; i<nClauses(); i++ )
+        {
+            Clause& c = ca[clauses[i]];
+            bayesian_update(c);
+        }
+
+        for( int i=0; i<learnts_core.size(); i++ )
+        {
+            Clause& c = ca[learnts_core[i]];
+            bayesian_update(c);
+        }
+
+        for( int i=0; i<learnts_tier2.size(); i++ )
+        {
+            Clause& c = ca[learnts_tier2[i]];
+            bayesian_update(c);
+        }
+
+        for( int i=0; i<learnts_local.size(); i++ )
+        {
+            Clause& c = ca[learnts_local[i]];
+            bayesian_update(c);
+        }
+    }
+
+    if ( polarity_init_method == IM_BMM )
+    {
+        for( int v=0; v<n; v++ )
+        {
+            polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+        }
+    }
+
+    if ( activity_init_method == IM_BMM )
+    {
+        for( int v=0; v<n; v++ )
+        {
+            var_act_vsids[v] = BayesianWeight(v);
+            var_act_maple[v] = BayesianWeight(v);
+        }
+    }
+
+}
+
+void Searcher::init_bayesian()
+{
+//    vec<int> cnt;
+//    cnt.growTo(nVars());
+//
+//    for( int v=0; v<nVars(); v++ )
+//        cnt[v] = 0;
+//
+//    for( int i=0; i<nClauses(); i++ )
+//    {
+//        Clause& c = ca[clauses[i]];
+//        for( int j=0; j<c.size(); j++ )
+//        {
+//            Lit q = c[j];
+//            if ( sign(q) )
+//                cnt[var(q)]--;
+//            else
+//                cnt[var(q)]++;
+//        }
+//    }
+
+    int n = nVars();
+    parameters.resize(n);
+    for( int i=0; i<n; i++ )
+    {
+        parameters[i].a = (double)rand() / RAND_MAX + 10;
+        parameters[i].b = (double)rand() / RAND_MAX + 10;
+    }
+
+//    for( int i=0; i<n; i++ )
+//    {
+//		if ( cnt[i] > 0 )
+//		{
+//			parameters[i].a = 10 - (double)rand() / RAND_MAX;
+//			parameters[i].b =  0 + (double)rand() / RAND_MAX;
+//		}
+//		else
+//		{
+//			parameters[i].a =  0 + (double)rand() / RAND_MAX;
+//			parameters[i].b = 10 - (double)rand() / RAND_MAX;
+//		}
+//    }
+}
+
+
+void Searcher::survey_update(Clause &a, int clause_id) {
+	vector<double> p(a.size(), 0.0);
+	double product = 1.0;
+	for(unsigned int i = 0; i < a.size(); i++){
+		double pu = 1.0;
+		double ps = 1.0;
+		Lit l = a[i];
+		int v = var(l);
+		if(sign(l)){
+			v = -(v+1); 
+		} else{
+			v = v+1;
+		}
+		if(this->literalLookup.count(v) != 0){
+			vector<int> vs = literalLookup[v];
+			for(unsigned int j = 0; j < vs.size(); j++){
+				if(vs[j] != clause_id){
+					ps *= (1 - survey_p[vs[j]][abs(v)]);
+				}
+			}
+		}
+
+		if(literalLookup.count(-v) != 0){
+			vector<int> vu = literalLookup[-v];
+			for(unsigned int j = 0; j < vu.size(); j++){
+				pu *= (1 - survey_p[vu[j]][abs(v)]);
+			}
+		}
+
+		double r1 = (1 - pu) * ps;
+		double r2 = (1 - ps) * pu;
+		double r3 = ps * pu;
+		p[i] = r1 / (r1 + r2 + r3);
+		product *= p[i];
+	}
+
+	for(unsigned int i = 0; i < a.size(); i++){
+		int v = 1 + var(a[i]);
+		survey_p[clause_id][v] = product / p[i];
+		//cout << clause_id << " " << v << " " << survey_p[clause_id][abs(v)] << endl;
+	}
+}
+
+
+void Searcher::survey_propogation(){
+
+    int epochs = init_epochs;
+    int num_literal = nVars();
+    int num_clauses = nClauses();
+
+    vector<double> probability(num_literal, 0.0);
+
+    //build LiteralLookup and survey_p
+    //
+    for(int i = 0; i < num_clauses; i++){
+	    Clause &c = ca[clauses[i]];
+	    map<int, double> row;
+	    for(int j = 0; j < c.size(); j++){
+		    Lit l = c[j];
+		    int v = var(l);
+		    if(sign(l)){
+			    //cout << v << endl;
+			v = -(v+1);
+		    } else{
+			    v = v+1;
+		    }
+		    //cout << v << endl;
+		    literalLookup[v].push_back(i);
+		    row[abs(v)] = (rand() * 1.0) / RAND_MAX;
+	    }
+	    survey_p.push_back(row);
+    }
+
+    /*auto it = literalLookup.begin();
+
+    while(it != literalLookup.end()){
+	    cout << it->first << " ";
+	    printVectorInt(it->second);
+	    it++;
+    } */
+
+    /*for(auto map : survey_p){
+	    auto it = map.begin();
+	   
+    	while(it != map.end()){
+	    cout << it->first << ": ";
+	    //printVectorInt(it->second);
+	    cout << it->second << "  ";
+	    it++;
+    	} 
+
+	cout << endl;
+    } */
+    
+    for(int k = 0; k < epochs; k++){
+    	for(int i = 0; i < num_clauses; i++){
+		Clause &a = ca[clauses[i]];
+		survey_update(a, i);
+    	}
+    }
+
+    for(int i = 0; i < num_literal; i++){
+        double p_positive = 1.0;
+        double p_negative = 1.0;
+        if(literalLookup.count(i+1) != 0){
+            vector<int> clause_plus = literalLookup[i+1];
+            for(unsigned int j = 0; j < clause_plus.size(); j++){
+                //cout << survey_p[clause_plus[j]][i+1] << endl;
+                p_positive *= (1 - survey_p[clause_plus[j]][i+1]);
+            }
+        }
+
+
+        if(literalLookup.count(-(i+1)) != 0){
+            vector<int> clause_negative = literalLookup[-(i+1)];
+            for(unsigned int j = 0; j < clause_negative.size(); j++){
+                p_negative *= (1 - survey_p[clause_negative[j]][i+1]);
+            }
+        }
+        probability[i] = p_negative / (p_positive + p_negative);
+        //cout << probability[i] << endl;
+        //cout << p_negative <<  "  " << p_positive << endl;
+
+        if ( polarity_init_method == SP )
+        {
+            polarity[i] = (probability[i] > 0.5 ? true : false);
+        }
+
+        if ( activity_init_method == SP )
+        {
+            var_act_vsids[i] = var_act_maple[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
+        }
+    }
+
+}
+
+
+void Searcher::jeroslow_wang_init()
+{
+    vec<double> cnt;
+    int n = nVars();
+    cnt.growTo(2 * n);
+    for( int v=0; v<2*n; v++ )
+        cnt[v] = 0.0;
+
+    for( int i=0; i<nClauses(); i++ )
+    {
+        Clause& c = ca[clauses[i]];
+        if ( c.size() >= 50 ) continue;
+        double sc = pow(2, -c.size());
+        for( int j=0; j<c.size(); j++ )
+        {
+            Lit q = c[j];
+            if ( sign(q) )
+                cnt[var(q) + n] += sc;
+            else
+                cnt[var(q)] += sc;
+        }
+    }
+
+    if ( polarity_init_method == JW )
+    {
+        for( int v=0; v<n; v++ )
+            polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
+    }
+
+    if ( activity_init_method == JW )
+    {
+        int m = nClauses();
+        if ( m == 0 ) m = 1;
+        for( int v=0; v<n; v++ )
+        {
+            var_act_maple[v] = var_act_vsids[v] = (cnt[v] + cnt[v+n]) / m;
+        }
+    }
+}
+
+
 lbool Searcher::solve(
     const uint64_t _max_confls
 ) {
@@ -2196,6 +2518,24 @@ lbool Searcher::solve(
         << "c Searcher::solve() called"
         << endl;
     }
+
+    double before_init_time = cpuTime();
+    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
+        init_bayesian();
+        bayesian();
+    }
+    if ( polarity_init_method == SP || activity_init_method == SP )
+        survey_propogation();
+    if ( polarity_init_method == JW || activity_init_method == JW )
+        jeroslow_wang_init();
+    if ( polarity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) polarity[v] = drand(random_seed) < 0.5 ? true : false;
+    }
+    if ( activity_init_method == RANDOM ) {
+        for( Var v=0; v<nVars(); v++ ) var_act_maple[v] = var_act_vsids[v] = drand(random_seed) * 0.00001;
+    }
+    double after_init_time = cpuTime();
+    printf("c Initialization time:  %12.2f s\n", after_init_time - before_init_time);
 
     resetStats();
     lbool status = l_Undef;
