@@ -600,8 +600,12 @@ inline bool Searcher::pick_polarity(const uint32_t var)
         case PolarityMode::polarmode_rnd:
             return mtrand.randInt(1);
 
+        case PolarityMode::polarmode_bmm:
+        case PolarityMode::polarmode_jw:
+        case PolarityMode::polarmode_sp:
         case PolarityMode::polarmode_automatic:
             return varData[var].polarity;
+
 
         default:
             assert(false);

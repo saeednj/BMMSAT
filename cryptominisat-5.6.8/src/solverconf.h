@@ -58,6 +58,17 @@ enum class PolarityMode {
     , polarmode_neg
     , polarmode_rnd
     , polarmode_automatic
+    , polarmode_bmm
+    , polarmode_jw
+    , polarmode_sp
+};
+
+enum class ActivityMode {
+    activmode_default ,
+    activmode_bmm ,
+    activmode_jw ,
+    activmode_sp ,
+    activmode_rand
 };
 
 enum class Restart {
@@ -154,6 +165,7 @@ class DLL_PUBLIC SolverConf
         double  var_decay_vsids_max;
         double random_var_freq;
         PolarityMode polarity_mode;
+        ActivityMode activity_mode;
 
         //Clause cleaning
 

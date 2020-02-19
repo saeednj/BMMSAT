@@ -69,6 +69,7 @@ class Main
         void handle_drat_option();
         void parse_restart_type();
         void parse_polarity_type();
+        void parse_activity_type();
         void dump_decisions_for_model();
         void check_num_threads_sanity(const unsigned thread_num) const;
 

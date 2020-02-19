@@ -321,6 +321,8 @@ void Main::add_supported_options()
         , "0 = normal run, 1 = preprocess and dump, 2 = read back dump and solution to produce final solution")
     ("polar", po::value<string>()->default_value("auto")
         , "{true,false,rnd,auto} Selects polarity mode. 'true' -> selects only positive polarity when branching. 'false' -> selects only negative polarity when branching. 'auto' -> selects last polarity used (also called 'caching')")
+    ("activ", po::value<string>()->default_value("default")
+        , "{true,false,rnd,auto} Selects polarity mode. 'true' -> selects only positive polarity when branching. 'false' -> selects only negative polarity when branching. 'auto' -> selects last polarity used (also called 'caching')")
     #ifdef STATS_NEEDED
     ("clid", po::bool_switch(&clause_ID_needed)
         , "Add clause IDs to DRAT output")
@@ -1004,7 +1006,24 @@ void Main::parse_polarity_type()
         else if (mode == "false") conf.polarity_mode = PolarityMode::polarmode_neg;
         else if (mode == "rnd") conf.polarity_mode = PolarityMode::polarmode_rnd;
         else if (mode == "auto") conf.polarity_mode = PolarityMode::polarmode_automatic;
+        else if (mode == "bmm") conf.polarity_mode = PolarityMode::polarmode_bmm;
+        else if (mode == "jw") conf.polarity_mode = PolarityMode::polarmode_jw;
+        else if (mode == "sp") conf.polarity_mode = PolarityMode::polarmode_sp;
         else throw WrongParam(mode, "unknown polarity-mode");
+    }
+}
+
+void Main::parse_activity_type()
+{
+    if (vm.count("activ")) {
+        string mode = vm["activ"].as<string>();
+
+        if (mode == "default") conf.activity_mode = ActivityMode::activmode_default;
+        else if (mode == "bmm") conf.activity_mode = ActivityMode::activmode_bmm;
+        else if (mode == "jw") conf.activity_mode = ActivityMode::activmode_jw;
+        else if (mode == "sp") conf.activity_mode = ActivityMode::activmode_sp;
+        else if (mode == "rand") conf.activity_mode = ActivityMode::activmode_rand;
+        else throw WrongParam(mode, "unknown activity_mode");
     }
 }
 

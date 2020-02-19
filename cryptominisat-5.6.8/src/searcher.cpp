@@ -2188,8 +2188,8 @@ void Searcher::bayesian_update(T& c)
         Lit l = c[j];
         if ( value(l) == l_True ) return; // this clause is already satisfied
         if ( value(l) == l_False ) continue; // this literal is already falsified
-        int v = var(l);
-        int sgn = !sign(l);
+        int v = l.var();
+        int sgn = !l.sign();
 
         updatedParams[v].a = parameters[v].a + (!sgn);
         updatedParams[v].b = parameters[v].b + (sgn);
@@ -2203,7 +2203,7 @@ void Searcher::bayesian_update(T& c)
     {
         Lit l = c[j];
         if ( value(l) == l_False ) continue; // this literal is already falsified
-        int v = var(l);
+        int v = l.var();
 
         double sumP = parameters[v].a + parameters[v].b;
         double sumUP = updatedParams[v].a + updatedParams[v].b;
@@ -2259,15 +2259,15 @@ void Searcher::bayesian()
         }
     }
 
-    if ( polarity_init_method == IM_BMM )
+    if ( conf.polarity_mode == PolarityMode::polarmode_bmm )
     {
         for( int v=0; v<n; v++ )
         {
-            polarity[v] = (parameters[v].a > parameters[v].b) ? false : true;
+            varData[v].polarity = (parameters[v].a > parameters[v].b) ? false : true;
         }
     }
 
-    if ( activity_init_method == IM_BMM )
+    if ( conf.activity_mode == ActivityMode::activmode_bmm )
     {
         for( int v=0; v<n; v++ )
         {
@@ -2303,8 +2303,8 @@ void Searcher::init_bayesian()
     parameters.resize(n);
     for( int i=0; i<n; i++ )
     {
-        parameters[i].a = (double)rand() / RAND_MAX + 10;
-        parameters[i].b = (double)rand() / RAND_MAX + 10;
+        parameters[i].a = mtrand.rand() + 10;
+        parameters[i].b = mtrand.rand() + 10;
     }
 
 //    for( int i=0; i<n; i++ )
@@ -2446,12 +2446,12 @@ void Searcher::survey_propogation(){
         //cout << probability[i] << endl;
         //cout << p_negative <<  "  " << p_positive << endl;
 
-        if ( polarity_init_method == SP )
+        if ( conf.polarity_mode == PolarityMode::polarmode_sp )
         {
             polarity[i] = (probability[i] > 0.5 ? true : false);
         }
 
-        if ( activity_init_method == SP )
+        if ( conf.activity_mode == ActivityMode::activmode_sp )
         {
             var_act_vsids[i] = var_act_maple[i] = (probability[i] > 0.5 ? probability[i] : 1 - probability[i]);
         }
@@ -2462,9 +2462,8 @@ void Searcher::survey_propogation(){
 
 void Searcher::jeroslow_wang_init()
 {
-    vec<double> cnt;
     int n = nVars();
-    cnt.growTo(2 * n);
+    vector<double> cnt(2*n);
     for( int v=0; v<2*n; v++ )
         cnt[v] = 0.0;
 
@@ -2483,13 +2482,13 @@ void Searcher::jeroslow_wang_init()
         }
     }
 
-    if ( polarity_init_method == JW )
+    if ( conf.polarity_mode == PolarityMode::polarmode_jw )
     {
         for( int v=0; v<n; v++ )
             polarity[v] = (cnt[v] > cnt[v+n]) ? false : true;
     }
 
-    if ( activity_init_method == JW )
+    if ( conf.activity_mode == ActivityMode::activmode_jw )
     {
         int m = nClauses();
         if ( m == 0 ) m = 1;
@@ -2520,19 +2519,19 @@ lbool Searcher::solve(
     }
 
     double before_init_time = cpuTime();
-    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
+    if ( conf.polarity_mode == PolarityMode::polarmode_bmm || conf.activity_mode == ActivityMode::activmode_bmm ) {
         init_bayesian();
         bayesian();
     }
-    if ( polarity_init_method == SP || activity_init_method == SP )
+    if ( conf.polarity_mode == PolarityMode::polarmode_sp || conf.activity_mode == ActivityMode::activmode_sp )
         survey_propogation();
-    if ( polarity_init_method == JW || activity_init_method == JW )
+    if ( conf.polarity_mode == PolarityMode::polarmode_jw || conf.activity_mode == ActivityMode::activmode_jw )
         jeroslow_wang_init();
-    if ( polarity_init_method == RANDOM ) {
-        for( Var v=0; v<nVars(); v++ ) polarity[v] = drand(random_seed) < 0.5 ? true : false;
-    }
-    if ( activity_init_method == RANDOM ) {
-        for( Var v=0; v<nVars(); v++ ) var_act_maple[v] = var_act_vsids[v] = drand(random_seed) * 0.00001;
+    if ( conf.activity_mode == ActivityMode::activmode_rand ) {
+        for( Var v=0; v<nVars(); v++ ) {
+            var_act_maple[v] = mtrand.rand() * 0.00001;
+            var_act_vsids[v] = mtrand.rand() * 0.00001;
+        }
     }
     double after_init_time = cpuTime();
     printf("c Initialization time:  %12.2f s\n", after_init_time - before_init_time);
