@@ -263,6 +263,18 @@ int main(int argc, char **argv)
     Bayesian b(nVars, cs);
     b.init();
     int res = b.main(epochs);
+    if ( res == 0 )
+    {
+        vector<int> s(nVars);
+        b.getAssignment(s);
+        for( int i=0; i<nVars; i++ )
+            printf("%d ", (i+1)*s[i]);
+        printf("\n");
+    }
+    else
+    {
+        printf("Not satisfied\n");
+    }
     return 0;
 #endif
 }
