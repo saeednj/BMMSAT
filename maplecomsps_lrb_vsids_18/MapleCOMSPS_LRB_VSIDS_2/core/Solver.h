@@ -43,6 +43,7 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <map>
 
 
+
 // Don't change the actual numbers.
 #define LOCAL 0
 #define TIER2 2
@@ -57,6 +58,8 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 //#define BayesianWeight(v) BayesianWeight_Max(v)
 
 namespace Minisat {
+
+class SearchInitializer;
 
 //=================================================================================================
 // Solver -- the main class:
@@ -449,6 +452,8 @@ static void drup(unsigned char op, const V& c, FILE* drup_file){
     vec<Lit> involved_lits;
     double    my_var_decay;
     bool DISTANCE;
+
+    SearchInitializer *search_init;
 
 //    void bayesian();
 //    template<typename T>

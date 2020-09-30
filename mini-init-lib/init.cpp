@@ -1,4 +1,60 @@
 #include "init.h"
+#include "core/Solver.h"
+
+using namespace Minisat;
+
+SearchInitializer::SearchInitializer()
+{
+}
+
+SearchInitializer::SearchInitializer(Solver* s, int polarity, int activity, int initEpoch, int updateEpoch)
+{
+    srand(time(NULL));
+
+    solver = s;
+
+    polarity_init_method = (InitMethod)polarity;
+    activity_init_method = (InitMethod)activity;
+
+    init_epochs = initEpoch;
+    update_epochs = updateEpoch;
+
+    if ( polarity_init_method == BMM || activity_init_method == BMM ) {
+        init_bayesian();
+        bayesian();
+    }
+
+    if ( polarity_init_method == JW || activity_init_method == JW )
+        jeroslow_wang();
+
+    if ( polarity_init_method == RANDOM )
+        for(int v=0; v<solver->nVars(); v++)
+            solver->setPolarity(v, rand() % 2 ? false : true);
+
+    if ( activity_init_method == RANDOM )
+        for(int v=0; v<solver->nVars(); v++)
+            solver->setActivity(v, rand() / RAND_MAX * 0.00001);
+}
+
+SearchInitializer::~SearchInitializer()
+{
+}
+
+void SearchInitializer::update(vector<Lit>& clause)
+{
+    for(int i=0; i<update_epochs; i++)
+    {
+        if (polarity_init_method == BMM)
+            bayesian_update(clause);
+    }
+
+    for(int i=0; i<clause.size(); i++)
+    {
+        int v = var(clause[i]);
+        solver->setPolarity(v, (parameters[v].a > parameters[v].b) ? false : true);
+        solver->setActivity(v, BayesianWeight(v));
+    }
+}
 
 template <typename T>
 void SearchInitializer::bayesian_update(T& c)

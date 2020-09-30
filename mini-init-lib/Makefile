@@ -1,4 +1,4 @@
-CFLAGS=-I../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/
+CFLAGS=-I. -I../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/
 
 CSRCS=init.cpp
 COBJS=$(CSRCS:.cpp=.o)

@@ -4,10 +4,9 @@
 #include <vector>
 #include <map>
 #include "core/SolverTypes.h"
-#include "core/Solver.h"
+//#include "core/Solver.h"
 
 using namespace std;
-using namespace Minisat;
 
 struct BetaDist {
     double a, b;
@@ -24,6 +23,10 @@ struct BetaDist {
  * 4. Random
  */
 
+namespace Minisat {
+
+class Solver;
+
 class SearchInitializer {
     public:
 
@@ -34,38 +37,11 @@ class SearchInitializer {
             RANDOM,
         };
 
-        SearchInitializer(Solver* s, int polarity, int activity, int initEpoch, int updateEpoch)
-        {
-            srand(time(NULL));
+        SearchInitializer();
+        SearchInitializer(Solver* s, int polarity, int activity, int initEpoch, int updateEpoch);
+        virtual ~SearchInitializer();
 
-            solver = s;
-
-            polarity_init_method = (InitMethod)polarity;
-            activity_init_method = (InitMethod)activity;
-
-            init_epochs = initEpoch;
-            update_epochs = updateEpoch;
-
-            if ( polarity_init_method == BMM || activity_init_method == BMM ) {
-                init_bayesian();
-                bayesian();
-            }
-
-            if ( polarity_init_method == JW || activity_init_method == JW )
-                jeroslow_wang();
-
-            if ( polarity_init_method == RANDOM )
-                for(int v=0; v<solver->nVars(); v++)
-                    solver->setPolarity(v, rand() % 2 ? false : true);
-
-            if ( activity_init_method == RANDOM )
-                for(int v=0; v<solver->nVars(); v++)
-                    solver->setActivity(v, rand() / RAND_MAX * 0.00001);
-        }
-
-        virtual ~SearchInitializer() {}
-
-        // TODO update interface
+        void update(vector<Lit>& clause);
 
     private:
         void bayesian();
@@ -84,4 +60,6 @@ class SearchInitializer {
         int init_epochs;
         int update_epochs;
 };
+
+}
 #endif

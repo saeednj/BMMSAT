@@ -1108,11 +1108,16 @@ lbool Solver::search(int& nof_conflicts)
                 collectFirstUIP(confl);
             analyze(confl, learnt_clause, backtrack_level, lbd);
             cancelUntil(backtrack_level);
-// TODO Set up an ``update'' interface in the init-lib
-//            if ( (polarity_init_method == BMM || activity_init_method == BMM) && update_epochs > 0 )
-//            {
-//                if ( learnt_clause.size() <= 2 )
-//                {
+
+            if ( (polarity_init_method == SearchInitializer::BMM || activity_init_method == SearchInitializer::BMM) && update_epochs > 0 )
+            {
+                if ( learnt_clause.size() <= 2 )
+                {
+                    vector<Lit> v(learnt_clause.size());
+                    for(int i=0; i<learnt_clause.size(); i++)
+                        v[i] = learnt_clause[i];
+                    search_init->update(v);
+
 //                    for( int i=0; i<update_epochs; i++ )
 //                        bayesian_update(learnt_clause);
 //
@@ -1123,8 +1128,8 @@ lbool Solver::search(int& nof_conflicts)
 //                        if ( activity_init_method == BMM )
 //                            activity_VSIDS[v] = activity_CHB[v] = BayesianWeight(v);
 //                    }
-//                }
-//            }
+                }
+            }
 
             if (VSIDS)
                 for (int i = 0; i < learnt_clause.size(); i++)
@@ -1622,7 +1627,7 @@ lbool Solver::solve_()
     if (!ok) return l_False;
 
     double before_init_time = cpuTime();
-    SearchInitializer initializer(this, polarity_init_method, activity_init_method, init_epochs, update_epochs);
+    search_init = new SearchInitializer(this, polarity_init_method, activity_init_method, init_epochs, update_epochs);
 //    if ( polarity_init_method == BMM || activity_init_method == BMM || activity_init_method == BMM_DIST ) {
 //        init_bayesian();
 //        bayesian();
