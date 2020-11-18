@@ -3,8 +3,12 @@
 if [ "$1" = "clean" ]; then
     cd src/
     make clean
+    cd ../../mini-init-lib
+    make clean
 else
-    cd src/
+    cd ../mini-init-lib
+    CFLAGS="-I. -I../maplesat/src/" make
+    cd ../maplesat/src
     make
     cp simp/maplesat_static ../bin/maplesat
 fi

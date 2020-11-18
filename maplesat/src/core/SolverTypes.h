@@ -109,21 +109,6 @@ const Lit lit_Undef = { -2 };  // }- Useful special constants.
 const Lit lit_Error = { -1 };  // }
 
 
-// Saeed
-struct BetaDist {
-    double a, b;
-};
-
-enum InitMethod {
-    DEFAULT = 0,
-    BMM = 1,     // Bayesian Moment Matching
-    JW = 2,      // Jeroslow Wang
-    RANDOM = 3,
-    DIST = 4,
-    SP = 5,      // Survey Propagation
-};
-
-
 
 //=================================================================================================
 // Lifted booleans:

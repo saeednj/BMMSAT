@@ -24,8 +24,9 @@ LFLAGS    ?= -Wall
 
 COPTIMIZE ?= -O3
 
-CFLAGS    += -I$(MROOT) -D __STDC_LIMIT_MACROS -D __STDC_FORMAT_MACROS
-LFLAGS    += -lz
+CFLAGS    += -I$(MROOT) -I$(MROOT)/../../mini-init-lib -D __STDC_LIMIT_MACROS -D __STDC_FORMAT_MACROS
+LFLAGS    += -L$(MROOT)/../../mini-init-lib -lz -lmininit
+
 
 .PHONY : s p d r rs clean 
 

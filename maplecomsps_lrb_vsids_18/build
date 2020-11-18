@@ -5,6 +5,10 @@
 #cd m4ri-20140914
 #./configure && make
 
-cd MapleCOMSPS_LRB_VSIDS_2/simp
+cd ../mini-init-lib
+make clean
+CFLAGS="-I. -I../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/" make
+
+cd ../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/simp
 MROOT=.. make clean rs
 cp -f ./minisat_static ../../bin/MapleCOMSPS_LRB_VSIDS_2

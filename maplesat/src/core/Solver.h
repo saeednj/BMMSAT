@@ -29,15 +29,10 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 #include <vector>
 #include <map>
 
-#define MAX(x, y) (((x) < (y)) ? (y) : (x))
-#define ABSDIFF(x, y) (((x) < (y)) ? ((y) - (x)) : ((x) - (y)))
-#define BayesianWeight_Max(v) (MAX(parameters[v].a, parameters[v].b) / (parameters[v].a + parameters[v].b))
-//#define Bayesian_Weight_Min(v) (1 - (ABSDIFF(parameters[v].a, parameters[v].b) / (2 * (parameters[v].a + parameters[v].b))))
-#define BayesianWeight_Min(v) (1.5 - BayesianWeight_Max(v))
-
-#define BayesianWeight(v) BayesianWeight_Max(v)
 
 namespace Minisat {
+
+class SearchInitializer;
 
 //=================================================================================================
 // Solver -- the main class:
@@ -339,13 +334,7 @@ protected:
     bool collectFirstUIP(CRef confl);
     double    my_var_decay;
 
-    void bayesian();
-    template<typename T>
-    void bayesian_update(T& c);
-    void init_bayesian();
-
-    vec<BetaDist> parameters;
-    vec<BetaDist> updatedParams;
+    SearchInitializer *search_init;
 
     int polarity_init_method;
     int activity_init_method;
@@ -354,12 +343,9 @@ protected:
     int init_epochs;   // config variable: Number of epochs for initialization
     int update_epochs; // config variable: Number of epochs on each conflit clause update
 
-    std::map<int, std::vector<int>> literalLookup;
-    std::vector<std::map<int, double>> survey_p;
-    void survey_propogation();
-    void survey_update(Clause &a, int clause_id);
-
-    void jeroslow_wang_init();
+    public:
+    Clause& getClause(int id) { return ca[clauses[id]]; }
+    void setActivity(Var v, double a) { activity[v] = a; }
 };
 
 
