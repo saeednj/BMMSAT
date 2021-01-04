@@ -1,14 +1,19 @@
 #!/bin/sh
 
-#rm -rf m4ri-20140914
-#tar zxvf m4ri-20140914.tar.gz
-#cd m4ri-20140914
-#./configure && make
+if [ ! -d m4ri-20140914 ]; then
+    tar zxvf m4ri-20140914.tar.gz
+    cd m4ri-20140914
+    ./configure && make
+    cd ..
+fi
 
 cd ../mini-init-lib
 make clean
 CFLAGS="-I. -I../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/" make
 
 cd ../maplecomsps_lrb_vsids_18/MapleCOMSPS_LRB_VSIDS_2/simp
-MROOT=.. make clean rs
-cp -f ./minisat_static ../../bin/MapleCOMSPS_LRB_VSIDS_2
+MROOT=.. make clean r
+cp -f ./minisat_release ../../bin/MapleCOMSPS_LRB_VSIDS_2
+
+export DYLD_LIBRARY_PATH=$PWD/m4ri-20140914/.libs:$DYLD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$PWD/m4ri-20140914/.libs:$LD_LIBRARY_PATH

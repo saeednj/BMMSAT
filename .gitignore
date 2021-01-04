@@ -35,6 +35,8 @@
 depend.mk
 maplesat_static
 maplesat_release
+minisat_release
+minisat_static
 
 # vim swap files
 *.swp

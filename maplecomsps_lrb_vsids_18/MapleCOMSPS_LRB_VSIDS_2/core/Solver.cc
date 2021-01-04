@@ -31,6 +31,32 @@ using namespace std;
 
 #include "init.h"
 
+#ifdef __APPLE__
+size_t fwrite_unlocked(const void *ptr, size_t size, size_t n, FILE *stream)
+{
+    size_t to_write = size * n;
+    const size_t total_to_write = to_write;
+
+    if (!to_write)
+        return 0;
+
+    fflush(stream);
+
+    while (to_write) {
+        ssize_t r = write(fileno(stream), ptr, to_write);
+        if (r < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
+        to_write -= (size_t)r;
+    }
+
+    return (total_to_write - to_write) / size;
+}
+#endif
+
 #ifdef BIN_DRUP
 int Solver::buf_len = 0;
 unsigned char Solver::drup_buf[2 * 1024 * 1024];

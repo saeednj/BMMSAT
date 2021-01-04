@@ -25,6 +25,11 @@ OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWA
 
 #define BIN_DRUP
 
+#ifdef __APPLE__
+#include <stdio.h>
+size_t fwrite_unlocked(const void *ptr, size_t size, size_t n, FILE *stream);
+#endif
+
 #define GLUCOSE23
 //#define INT_QUEUE_AVG
 //#define LOOSE_PROP_STAT

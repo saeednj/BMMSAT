@@ -1,19 +1,19 @@
-To compile:
-./starexec_build
+## Compile
+./build
 
-To run:
+## Run
 
-Baseline version:
-./bin/MapleCOMSPS_LRB_VSIDS_2 -no-init-activity -no-init-polarity {input_cnf_file}
+### Baseline version:
+./bin/MapleCOMSPS_LRB_VSIDS_2 {input_cnf_file}
 
-with BMM-polarity:
-./bin/MapleCOMSPS_LRB_VSIDS_2 -init-polarity -no-init-activity {input_cnf_file} 
+### with BMM-polarity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -pol-init=1 {input_cnf_file} 
 
-with BMM-activity:
-./bin/MapleCOMSPS_LRB_VSIDS_2 -no-init-polarity -init-activity {input_cnf_file}
+### with BMM-activity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -act-init=1 {input_cnf_file}
 
-with Combined BMM-activity and BMM-polarity:
-./bin/MapleCOMSPS_LRB_VSIDS_2 -init-activity -init-polarity {input_cnf_file}
+### with Combined BMM-activity and BMM-polarity:
+./bin/MapleCOMSPS_LRB_VSIDS_2 -pol-init=1 -act-init=1 {input_cnf_file}
 
 
 
